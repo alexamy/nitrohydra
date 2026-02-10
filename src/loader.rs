@@ -8,18 +8,18 @@ use std::sync::{mpsc, Arc};
 const IMAGE_EXTENSIONS: &[&str] = &["jpg", "jpeg", "png"];
 const MAX_TEXTURE_SIZE: u32 = 512;
 
+pub struct LoadResultData {
+    pub index: usize,
+    pub name: String,
+    pub image: egui::ColorImage,
+    pub dimensions: [u32; 2],
+}
+
 pub enum Poll {
-    Image(usize, String, egui::ColorImage, [u32; 2]),
+    Image(LoadResultData),
     Error(String),
     Pending,
     Done,
-}
-
-pub struct LoadResultData {
-    index: usize,
-    name: String,
-    image: egui::ColorImage,
-    dimensions: [u32; 2],
 }
 
 type LoadResult = Result<LoadResultData, String>;
@@ -48,7 +48,7 @@ impl ImageLoader {
 
     pub fn poll(&self) -> Poll {
         match self.rx.try_recv() {
-            Ok(Ok(LoadResultData { index, name, image, dimensions })) => Poll::Image(index, name, image, dimensions),
+            Ok(Ok(LoadResultData { index, name, image, dimensions })) => Poll::Image(LoadResultData { index, name, image, dimensions }),
             Ok(Err(e)) => Poll::Error(e),
             Err(mpsc::TryRecvError::Empty) => Poll::Pending,
             Err(mpsc::TryRecvError::Disconnected) => Poll::Done,
