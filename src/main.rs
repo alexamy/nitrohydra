@@ -89,19 +89,14 @@ impl eframe::App for App {
 
 impl App {
     fn new(cc: &eframe::CreationContext<'_>) -> Self {
-        let mut app = Self {
+        Self {
             path: cc
                 .storage
                 .and_then(|s| eframe::get_value(s, "path"))
                 .unwrap_or_default(),
             monitors: monitors::detect().unwrap_or_default(),
             ..Self::default()
-        };
-        if !app.path.is_empty() {
-            app.loader = Some(ImageLoader::start(app.path.clone(), cc.egui_ctx.clone()));
-            app.state = State::Loading;
         }
-        app
     }
 
     fn poll_loader(&mut self, ctx: &egui::Context) {
