@@ -1,12 +1,16 @@
 mod cache;
 mod loader;
+mod monitors;
+mod wallpaper;
 
 use core::f32;
 
-use std::path::Path;
+use std::path::{Path, PathBuf};
+use std::sync::mpsc;
 
 use eframe::egui;
 use loader::{ImageLoader, Poll};
+use monitors::Monitor;
 
 fn main() -> eframe::Result<()> {
     let options = eframe::NativeOptions {
@@ -19,10 +23,12 @@ fn main() -> eframe::Result<()> {
         Box::new(|cc| {
             let path = "/home/alex/Dropbox/Wallpapers".to_string();
             let loader = ImageLoader::start(path.clone(), cc.egui_ctx.clone());
+            let monitors = monitors::detect().unwrap_or_default();
             Ok(Box::new(App {
                 path,
                 state: State::Loading,
                 loader: Some(loader),
+                monitors,
                 ..App::default()
             }))
         }),
@@ -35,6 +41,9 @@ struct App {
     thumb_size: f32,
     loader: Option<ImageLoader>,
     selected: Vec<usize>,
+    monitors: Vec<Monitor>,
+    apply_rx: Option<mpsc::Receiver<Result<(), String>>>,
+    apply_status: Option<Result<(), String>>,
 }
 
 impl Default for App {
@@ -45,6 +54,9 @@ impl Default for App {
             thumb_size: 150.0,
             loader: None,
             selected: Vec::new(),
+            monitors: Vec::new(),
+            apply_rx: None,
+            apply_status: None,
         }
     }
 }
@@ -66,6 +78,7 @@ enum State {
 impl eframe::App for App {
     fn update(&mut self, ctx: &egui::Context, _frame: &mut eframe::Frame) {
         self.poll_loader(ctx);
+        self.poll_apply();
 
         egui::TopBottomPanel::bottom("selection_panel")
             .frame(
@@ -140,13 +153,37 @@ impl App {
         });
     }
 
-    fn show_selection(&self, ui: &mut egui::Ui) {
+    fn poll_apply(&mut self) {
+        if let Some(rx) = &self.apply_rx
+            && let Ok(result) = rx.try_recv()
+        {
+            self.apply_status = Some(result);
+            self.apply_rx = None;
+        }
+    }
+
+    fn start_apply(&mut self, assignments: Vec<(PathBuf, Monitor)>, ctx: &egui::Context) {
+        let (tx, rx) = mpsc::channel();
+        let ctx = ctx.clone();
+        std::thread::spawn(move || {
+            let result = wallpaper::apply(&assignments);
+            let _ = tx.send(result);
+            ctx.request_repaint();
+        });
+
+        self.apply_rx = Some(rx);
+        self.apply_status = None;
+    }
+
+    fn show_selection(&mut self, ui: &mut egui::Ui) {
         let State::Images(entries) = &self.state else {
             return;
         };
         if self.selected.is_empty() {
             return;
         }
+
+        let mut apply_assignments = None;
 
         ui.horizontal(|ui| {
             for (slot, &idx) in self.selected.iter().enumerate() {
@@ -161,14 +198,40 @@ impl App {
                 });
             }
 
-            if self.selected.len() == 2 {
+            if self.selected.len() == 2 && self.monitors.len() >= 2 {
                 ui.vertical(|ui| {
                     ui.add_space(16.0);
-                    // TODO: add apply handler
-                    let _ = ui.button("Apply");
+                    let applying = self.apply_rx.is_some();
+                    if applying {
+                        ui.spinner();
+                    } else if ui.button("Apply").clicked() {
+                        // Extract paths while we still hold the immutable borrow
+                        let assignments: Vec<(PathBuf, Monitor)> = self
+                            .selected
+                            .iter()
+                            .zip(self.monitors.iter())
+                            .map(|(&idx, monitor)| {
+                                let path = PathBuf::from(entries[idx].texture.name());
+                                (path, monitor.clone())
+                            })
+                            .collect();
+                        apply_assignments = Some(assignments);
+                    }
+
+                    if let Some(status) = &self.apply_status {
+                        match status {
+                            Ok(()) => { ui.label("Applied!"); }
+                            Err(e) => { ui.colored_label(egui::Color32::RED, e); }
+                        }
+                    }
                 });
             }
         });
+
+        if let Some(assignments) = apply_assignments {
+            let ctx = ui.ctx().clone();
+            self.start_apply(assignments, &ctx);
+        }
     }
 
     fn show_gallery(&mut self, ui: &mut egui::Ui) {
