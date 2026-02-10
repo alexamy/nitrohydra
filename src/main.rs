@@ -142,7 +142,7 @@ impl App {
     fn show_path_input(&mut self, ui: &mut egui::Ui) {
         ui.label("Directory path:");
         ui.horizontal(|ui| {
-            let clicked = ui.button("Read").clicked();
+            let clicked = ui.button("Reload").clicked();
             ui.add(egui::TextEdit::singleline(&mut self.path).desired_width(f32::INFINITY));
             if clicked {
                 self.loader = Some(ImageLoader::start(self.path.clone(), ui.ctx().clone()));
