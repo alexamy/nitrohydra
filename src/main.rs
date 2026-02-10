@@ -10,16 +10,26 @@ fn main() -> eframe::Result<()> {
             egui_extras::install_image_loaders(&cc.egui_ctx);
             Ok(Box::new(App {
                 path: "/home/alex/Pictures/nitrohydra".to_string(),
-                state: State::default(),
+                ..App::default()
             }))
         }),
     )
 }
 
-#[derive(Default)]
 struct App {
     path: String,
     state: State,
+    thumb_size: f32,
+}
+
+impl Default for App {
+    fn default() -> Self {
+        Self {
+            path: String::new(),
+            state: State::default(),
+            thumb_size: 150.0,
+        }
+    }
 }
 
 #[derive(Default)]
@@ -45,8 +55,11 @@ impl eframe::App for App {
                 }
             });
 
+            ui.add(egui::Slider::new(&mut self.thumb_size, 50.0..=400.0).text("Size"));
+
             ui.separator();
 
+            let thumb_size = self.thumb_size;
             match &self.state {
                 State::Empty => {}
                 State::Error(e) => {
@@ -60,7 +73,7 @@ impl eframe::App for App {
                         ui.horizontal_wrapped(|ui| {
                             for path in images {
                                 let uri = format!("file://{}", path.display());
-                                ui.add(egui::Image::new(uri).max_size(egui::vec2(150.0, 150.0)));
+                                ui.add(egui::Image::new(uri).max_size(egui::vec2(thumb_size, thumb_size)));
                             }
                         });
                     });
