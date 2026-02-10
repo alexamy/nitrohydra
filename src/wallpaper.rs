@@ -61,7 +61,7 @@ fn save_composed(canvas: &RgbImage) -> Result<PathBuf, String> {
     std::fs::create_dir_all(&cache_dir)
         .map_err(|e| format!("failed to create cache dir: {e}"))?;
 
-    let path = cache_dir.join("wallpaper.png");
+    let path = cache_dir.join("_composed.png");
     canvas
         .save(&path)
         .map_err(|e| format!("failed to save wallpaper: {e}"))?;
