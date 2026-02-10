@@ -1,18 +1,30 @@
 use eframe::egui;
+use std::path::PathBuf;
 
 fn main() -> eframe::Result<()> {
     let options = eframe::NativeOptions::default();
     eframe::run_native(
         "nitrohydra",
         options,
-        Box::new(|_cc| Ok(Box::new(App::default()))),
+        Box::new(|cc| {
+            egui_extras::install_image_loaders(&cc.egui_ctx);
+            Ok(Box::new(App::default()))
+        }),
     )
 }
 
 #[derive(Default)]
 struct App {
     path: String,
-    output: String,
+    state: State,
+}
+
+#[derive(Default)]
+enum State {
+    #[default]
+    Empty,
+    Error(String),
+    Images(Vec<PathBuf>),
 }
 
 impl eframe::App for App {
@@ -23,27 +35,56 @@ impl eframe::App for App {
                 let clicked = ui.button("Read").clicked();
                 ui.add(egui::TextEdit::singleline(&mut self.path).desired_width(f32::INFINITY));
                 if clicked {
-                    self.output = read_dir(&self.path);
+                    self.state = match read_images(&self.path) {
+                        Ok(images) => State::Images(images),
+                        Err(e) => State::Error(e),
+                    };
                 }
             });
-            ui.label("Files:");
-            ui.add_sized(
-                ui.available_size(),
-                egui::TextEdit::multiline(&mut self.output),
-            );
+
+            ui.separator();
+
+            match &self.state {
+                State::Empty => {}
+                State::Error(e) => {
+                    ui.colored_label(egui::Color32::RED, e);
+                }
+                State::Images(images) if images.is_empty() => {
+                    ui.label("No images found.");
+                }
+                State::Images(images) => {
+                    egui::ScrollArea::vertical().show(ui, |ui| {
+                        ui.horizontal_wrapped(|ui| {
+                            for path in images {
+                                let uri = format!("file://{}", path.display());
+                                ui.add(
+                                    egui::Image::new(uri)
+                                        .max_size(egui::vec2(150.0, 150.0)),
+                                );
+                            }
+                        });
+                    });
+                }
+            }
         });
     }
 }
 
-fn read_dir(path: &str) -> String {
-    match std::fs::read_dir(path) {
-        Ok(entries) => entries
-            .map(|e| match e {
-                Ok(entry) => entry.file_name().to_string_lossy().into_owned(),
-                Err(e) => format!("[error: {e}]"),
-            })
-            .collect::<Vec<_>>()
-            .join("\n"),
-        Err(e) => format!("Error: {e}"),
-    }
+const IMAGE_EXTENSIONS: &[&str] = &[
+    "jpg", "jpeg", "png", "gif", "webp", "bmp", "tiff", "tif",
+];
+
+fn read_images(path: &str) -> Result<Vec<PathBuf>, String> {
+    let entries = std::fs::read_dir(path).map_err(|e| format!("Error: {e}"))?;
+    Ok(entries
+        .filter_map(|e| e.ok())
+        .map(|e| e.path())
+        .filter(|p| {
+            p.is_file()
+                && p.extension()
+                    .and_then(|ext| ext.to_str())
+                    .map(|ext| IMAGE_EXTENSIONS.contains(&ext.to_lowercase().as_str()))
+                    .unwrap_or(false)
+        })
+        .collect())
 }
