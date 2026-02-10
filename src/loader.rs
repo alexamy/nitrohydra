@@ -9,14 +9,16 @@ const IMAGE_EXTENSIONS: &[&str] = &["jpg", "jpeg", "png"];
 const MAX_TEXTURE_SIZE: u32 = 512;
 
 pub enum Poll {
-    Image(String, egui::ColorImage),
+    Image(String, egui::ColorImage, [u32; 2]),
     Error(String),
     Pending,
     Done,
 }
 
+type LoadResult = Result<(String, egui::ColorImage, [u32; 2]), String>;
+
 pub struct ImageLoader {
-    rx: mpsc::Receiver<Result<(String, egui::ColorImage), String>>,
+    rx: mpsc::Receiver<LoadResult>,
     cancelled: Arc<AtomicBool>,
 }
 
@@ -39,7 +41,7 @@ impl ImageLoader {
 
     pub fn poll(&self) -> Poll {
         match self.rx.try_recv() {
-            Ok(Ok((name, img))) => Poll::Image(name, img),
+            Ok(Ok((name, img, dims))) => Poll::Image(name, img, dims),
             Ok(Err(e)) => Poll::Error(e),
             Err(mpsc::TryRecvError::Empty) => Poll::Pending,
             Err(mpsc::TryRecvError::Disconnected) => Poll::Done,
@@ -49,7 +51,7 @@ impl ImageLoader {
 
 fn decode(
     path: &str,
-    tx: mpsc::SyncSender<Result<(String, egui::ColorImage), String>>,
+    tx: mpsc::SyncSender<LoadResult>,
     ctx: egui::Context,
     cancelled: Arc<AtomicBool>,
 ) {
@@ -76,20 +78,23 @@ fn decode(
 
     paths.par_iter().for_each_with(tx, |tx, path| {
         if cancelled.load(Ordering::Relaxed) { return; }
-        let Ok(color_image) = load_image(path) else { return };
+        let Ok((color_image, dims)) = load_image(path) else { return };
         let name = path.to_string_lossy().into_owned();
-        if tx.send(Ok((name, color_image))).is_ok() {
+        if tx.send(Ok((name, color_image, dims))).is_ok() {
             ctx.request_repaint();
         }
     });
 }
 
-fn load_image(path: &Path) -> Result<egui::ColorImage, image::ImageError> {
-    if let Some(cached) = cache::load(path) {
-        return Ok(cached);
-    }
-    let img = image::open(path)?;
-    let thumbnail = img.thumbnail(MAX_TEXTURE_SIZE, MAX_TEXTURE_SIZE);
-    cache::save(path, &thumbnail);
-    Ok(cache::to_color_image(&thumbnail))
+fn load_image(path: &Path) -> Result<(egui::ColorImage, [u32; 2]), image::ImageError> {
+    let (w, h) = image::image_dimensions(path)?;
+    let color_image = if let Some(cached) = cache::load(path) {
+        cached
+    } else {
+        let img = image::open(path)?;
+        let thumbnail = img.thumbnail(MAX_TEXTURE_SIZE, MAX_TEXTURE_SIZE);
+        cache::save(path, &thumbnail);
+        cache::to_color_image(&thumbnail)
+    };
+    Ok((color_image, [w, h]))
 }

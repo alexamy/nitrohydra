@@ -45,13 +45,18 @@ impl Default for App {
     }
 }
 
+struct ImageEntry {
+    texture: egui::TextureHandle,
+    original_size: [u32; 2],
+}
+
 #[derive(Default)]
 enum State {
     #[default]
     Empty,
     Loading,
     Error(String),
-    Images(Vec<egui::TextureHandle>),
+    Images(Vec<ImageEntry>),
 }
 
 impl eframe::App for App {
@@ -72,11 +77,12 @@ impl App {
         if let Some(loader) = &self.loader {
             loop {
                 match loader.poll() {
-                    Poll::Image(name, img) => {
+                    Poll::Image(name, img, original_size) => {
                         let texture = ctx.load_texture(name, img, Default::default());
+                        let entry = ImageEntry { texture, original_size };
                         match &mut self.state {
-                            State::Images(v) => v.push(texture),
-                            _ => self.state = State::Images(vec![texture]),
+                            State::Images(v) => v.push(entry),
+                            _ => self.state = State::Images(vec![entry]),
                         }
                     }
                     Poll::Error(e) => {
@@ -128,12 +134,12 @@ impl App {
             State::Error(e) => {
                 ui.colored_label(egui::Color32::RED, e);
             }
-            State::Images(textures) if textures.is_empty() && !loading => {
+            State::Images(entries) if entries.is_empty() && !loading => {
                 ui.label("No images found.");
             }
-            State::Images(textures) if textures.is_empty() => {}
-            State::Images(textures) => {
-                let clicked = self.show_image_grid(ui, textures);
+            State::Images(entries) if entries.is_empty() => {}
+            State::Images(entries) => {
+                let clicked = self.show_image_grid(ui, entries);
                 if let Some(i) = clicked {
                     self.handle_image_click(i);
                 }
@@ -141,11 +147,7 @@ impl App {
         }
     }
 
-    fn show_image_grid(
-        &self,
-        ui: &mut egui::Ui,
-        textures: &[egui::TextureHandle],
-    ) -> Option<usize> {
+    fn show_image_grid(&self, ui: &mut egui::Ui, entries: &[ImageEntry]) -> Option<usize> {
         let thumb_size = self.thumb_size;
         let mut clicked_index = None;
 
@@ -153,9 +155,9 @@ impl App {
             .max_width(f32::INFINITY)
             .show(ui, |ui| {
                 ui.horizontal_wrapped(|ui| {
-                    for (i, texture) in textures.iter().enumerate() {
+                    for (i, entry) in entries.iter().enumerate() {
                         let response = ui.add(
-                            egui::Image::new(texture)
+                            egui::Image::new(&entry.texture)
                                 .maintain_aspect_ratio(true)
                                 .fit_to_exact_size(egui::vec2(thumb_size, thumb_size))
                                 .sense(egui::Sense::click()),
@@ -166,7 +168,7 @@ impl App {
                         }
 
                         response.clone().on_hover_ui(|ui| {
-                            show_image_tooltip(ui, texture);
+                            show_image_tooltip(ui, entry);
                         });
 
                         if response.clicked() {
@@ -207,13 +209,13 @@ fn paint_selection_badge(ui: &egui::Ui, rect: egui::Rect, num: usize) {
     );
 }
 
-fn show_image_tooltip(ui: &mut egui::Ui, texture: &egui::TextureHandle) {
-    let full_path = texture.name();
+fn show_image_tooltip(ui: &mut egui::Ui, entry: &ImageEntry) {
+    let full_path = entry.texture.name();
     let path = Path::new(&full_path);
     let name = path
         .file_name()
         .map(|n| n.to_string_lossy())
         .unwrap_or_default();
-    let [w, h] = texture.size();
+    let [w, h] = entry.original_size;
     ui.label(format!("{name}\n{w} × {h}\n{full_path}"));
 }
