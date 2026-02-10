@@ -2,7 +2,10 @@ use eframe::egui;
 use std::path::PathBuf;
 
 fn main() -> eframe::Result<()> {
-    let options = eframe::NativeOptions::default();
+    let options = eframe::NativeOptions {
+        viewport: egui::ViewportBuilder::default().with_inner_size([1280.0, 720.0]),
+        ..Default::default()
+    };
     eframe::run_native(
         "nitrohydra",
         options,
@@ -73,7 +76,11 @@ impl eframe::App for App {
                         ui.horizontal_wrapped(|ui| {
                             for path in images {
                                 let uri = format!("file://{}", path.display());
-                                ui.add(egui::Image::new(uri).max_size(egui::vec2(thumb_size, thumb_size)));
+                                ui.add(
+                                    egui::Image::new(uri)
+                                        .maintain_aspect_ratio(true)
+                                        .fit_to_exact_size(egui::vec2(thumb_size, thumb_size)),
+                                );
                             }
                         });
                     });
