@@ -84,23 +84,38 @@ fn save_composed(canvas: &RgbImage) -> Result<PathBuf, String> {
     Ok(final_path)
 }
 
+const SCHEMAS: &[&str] = &[
+    "org.cinnamon.desktop.background",
+    "org.gnome.desktop.background",
+    "org.mate.background",
+];
+
 fn set_wallpaper(path: &Path) -> Result<(), String> {
     let uri = format!("file://{}", path.display());
-
-    gsettings_set("picture-uri", &uri)?;
-    gsettings_set("picture-options", "spanned")?;
-    Ok(())
+    let mut any_ok = false;
+    for schema in SCHEMAS {
+        if gsettings_set(schema, "picture-uri", &uri).is_ok()
+            && gsettings_set(schema, "picture-options", "spanned").is_ok()
+        {
+            any_ok = true;
+        }
+    }
+    if any_ok {
+        Ok(())
+    } else {
+        Err("no supported desktop environment found".into())
+    }
 }
 
-fn gsettings_set(key: &str, value: &str) -> Result<(), String> {
+fn gsettings_set(schema: &str, key: &str, value: &str) -> Result<(), String> {
     let output = Command::new("gsettings")
-        .args(["set", "org.cinnamon.desktop.background", key, value])
+        .args(["set", schema, key, value])
         .output()
         .map_err(|e| format!("failed to run gsettings: {e}"))?;
 
     if !output.status.success() {
         let stderr = String::from_utf8_lossy(&output.stderr);
-        return Err(format!("gsettings set {key} failed: {stderr}"));
+        return Err(format!("gsettings set {schema} {key} failed: {stderr}"));
     }
     Ok(())
 }
