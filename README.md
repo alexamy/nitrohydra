@@ -11,14 +11,16 @@ Browse a folder of images, select one wallpaper per monitor, and apply them inst
 - Per-monitor wallpaper assignment (select #1 for left, #2 for right)
 - Cover-resize: images are scaled and center-cropped to fill each monitor without letterboxing
 
-## Technology
+## Building from source
 
-- **Rust** (2024 edition)
-- **eframe / egui** for the GUI
-- **image** crate for loading, resizing, and composing wallpapers
-- **rayon** for parallel image processing
-- **xrandr** for monitor detection
-- **gsettings** for applying the wallpaper on Cinnamon
+Requires Rust 2024 edition (1.85+) and `xrandr` / `gsettings` available on PATH.
+
+```bash
+git clone https://github.com/alexamy/nitrohydra.git
+cd nitrohydra
+cargo build --release
+./target/release/nitrohydra
+```
 
 ## Built with ❤️
 
