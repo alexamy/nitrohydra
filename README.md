@@ -11,14 +11,20 @@ Browse a folder of images, select one wallpaper per monitor, and apply them inst
 
 ## Features
 
-- Thumbnail gallery with adjustable size
-- Parallel image loading with persistent disk cache
+- Thumbnail gallery with adjustable size and persistent disk cache
 - Per-monitor wallpaper assignment (select #1 for left, #2 for right)
 - Cover-resize: images are scaled and center-cropped to fill each monitor without letterboxing
 
+## Requirements
+
+- `xrandr` — used to detect connected monitors and their resolutions
+- `gsettings` — used to apply the composed wallpaper via GNOME/Cinnamon settings
+
+Both should be pre-installed on most GNOME-based desktops.
+
 ## Building from source
 
-Requires Rust 2024 edition (1.85+) and `xrandr` / `gsettings` available on PATH.
+Requires Rust 2024 edition (1.85+).
 
 ```bash
 git clone https://github.com/alexamy/nitrohydra.git
