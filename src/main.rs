@@ -18,21 +18,7 @@ fn main() -> eframe::Result<()> {
     eframe::run_native(
         "nitrohydra",
         options,
-        Box::new(|cc| {
-            let mut app = App {
-                path: cc
-                    .storage
-                    .and_then(|s| eframe::get_value(s, "path"))
-                    .unwrap_or_default(),
-                monitors: monitors::detect().unwrap_or_default(),
-                ..App::default()
-            };
-            if !app.path.is_empty() {
-                app.loader = Some(ImageLoader::start(app.path.clone(), cc.egui_ctx.clone()));
-                app.state = State::Loading;
-            }
-            Ok(Box::new(app))
-        }),
+        Box::new(|cc| Ok(Box::new(App::new(cc)))),
     )
 }
 
@@ -102,6 +88,22 @@ impl eframe::App for App {
 }
 
 impl App {
+    fn new(cc: &eframe::CreationContext<'_>) -> Self {
+        let mut app = Self {
+            path: cc
+                .storage
+                .and_then(|s| eframe::get_value(s, "path"))
+                .unwrap_or_default(),
+            monitors: monitors::detect().unwrap_or_default(),
+            ..Self::default()
+        };
+        if !app.path.is_empty() {
+            app.loader = Some(ImageLoader::start(app.path.clone(), cc.egui_ctx.clone()));
+            app.state = State::Loading;
+        }
+        app
+    }
+
     fn poll_loader(&mut self, ctx: &egui::Context) {
         if let Some(loader) = &self.loader {
             loop {
