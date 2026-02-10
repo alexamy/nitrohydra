@@ -76,7 +76,7 @@ fn save_composed(canvas: &RgbImage) -> Result<PathBuf, String> {
 
     let file = std::fs::File::create(&tmp_path)
         .map_err(|e| format!("failed to create wallpaper file: {e}"))?;
-    let encoder = JpegEncoder::new_with_quality(file, 95);
+    let encoder = JpegEncoder::new_with_quality(std::io::BufWriter::new(file), 90);
     canvas
         .write_with_encoder(encoder)
         .map_err(|e| format!("failed to save wallpaper: {e}"))?;
