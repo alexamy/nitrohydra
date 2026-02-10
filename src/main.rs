@@ -46,47 +46,58 @@ enum State {
 impl eframe::App for App {
     fn update(&mut self, ctx: &egui::Context, _frame: &mut eframe::Frame) {
         egui::CentralPanel::default().show(ctx, |ui| {
-            ui.label("Directory path:");
-            ui.horizontal(|ui| {
-                let clicked = ui.button("Read").clicked();
-                ui.add(egui::TextEdit::singleline(&mut self.path).desired_width(f32::INFINITY));
-                if clicked {
-                    self.state = match read_images(&self.path) {
-                        Ok(images) => State::Images(images),
-                        Err(e) => State::Error(e),
-                    };
-                }
-            });
-
-            ui.add(egui::Slider::new(&mut self.thumb_size, 50.0..=400.0).text("Size"));
-
+            self.show_path_input(ui);
+            self.show_size_slider(ui);
             ui.separator();
+            self.show_gallery(ui);
+        });
+    }
+}
 
-            let thumb_size = self.thumb_size;
-            match &self.state {
-                State::Empty => {}
-                State::Error(e) => {
-                    ui.colored_label(egui::Color32::RED, e);
-                }
-                State::Images(images) if images.is_empty() => {
-                    ui.label("No images found.");
-                }
-                State::Images(images) => {
-                    egui::ScrollArea::vertical().show(ui, |ui| {
-                        ui.horizontal_wrapped(|ui| {
-                            for path in images {
-                                let uri = format!("file://{}", path.display());
-                                ui.add(
-                                    egui::Image::new(uri)
-                                        .maintain_aspect_ratio(true)
-                                        .fit_to_exact_size(egui::vec2(thumb_size, thumb_size)),
-                                );
-                            }
-                        });
-                    });
-                }
+impl App {
+    fn show_path_input(&mut self, ui: &mut egui::Ui) {
+        ui.label("Directory path:");
+        ui.horizontal(|ui| {
+            let clicked = ui.button("Read").clicked();
+            ui.add(egui::TextEdit::singleline(&mut self.path).desired_width(f32::INFINITY));
+            if clicked {
+                self.state = match read_images(&self.path) {
+                    Ok(images) => State::Images(images),
+                    Err(e) => State::Error(e),
+                };
             }
         });
+    }
+
+    fn show_size_slider(&mut self, ui: &mut egui::Ui) {
+        ui.add(egui::Slider::new(&mut self.thumb_size, 50.0..=400.0).text("Size"));
+    }
+
+    fn show_gallery(&self, ui: &mut egui::Ui) {
+        let thumb_size = self.thumb_size;
+        match &self.state {
+            State::Empty => {}
+            State::Error(e) => {
+                ui.colored_label(egui::Color32::RED, e);
+            }
+            State::Images(images) if images.is_empty() => {
+                ui.label("No images found.");
+            }
+            State::Images(images) => {
+                egui::ScrollArea::vertical().show(ui, |ui| {
+                    ui.horizontal_wrapped(|ui| {
+                        for path in images {
+                            let uri = format!("file://{}", path.display());
+                            ui.add(
+                                egui::Image::new(uri)
+                                    .maintain_aspect_ratio(true)
+                                    .fit_to_exact_size(egui::vec2(thumb_size, thumb_size)),
+                            );
+                        }
+                    });
+                });
+            }
+        }
     }
 }
 
