@@ -357,14 +357,12 @@ impl App {
     }
 
     fn handle_image_click(&mut self, index: usize) {
+        self.apply_status = None;
         if let Some(sel_pos) = self.selected.iter().position(|&idx| idx == index) {
-            // Already selected — deselect it; if it was #1, #2 shifts down
             self.selected.remove(sel_pos);
         } else if self.selected.len() < 2 {
-            // Room for another selection
             self.selected.push(index);
         } else {
-            // Both slots full — cycle: start fresh with this as #1
             self.selected.clear();
             self.selected.push(index);
         }
