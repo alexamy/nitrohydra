@@ -96,12 +96,16 @@ impl eframe::App for App {
 
 impl App {
     fn new(cc: &eframe::CreationContext<'_>) -> Self {
+        let path: String = cc
+            .storage
+            .and_then(|s| eframe::get_value(s, "path"))
+            .unwrap_or_default();
+
         Self {
-            path: cc
-                .storage
-                .and_then(|s| eframe::get_value(s, "path"))
-                .unwrap_or_default(),
+            path: path.clone(),
             monitors: monitors::detect().unwrap_or_default(),
+            loader: Some(ImageLoader::start(path.clone(), cc.egui_ctx.clone())),
+            state: State::Loading,
             ..Self::default()
         }
     }
