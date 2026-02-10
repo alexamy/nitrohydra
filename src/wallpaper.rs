@@ -2,12 +2,11 @@ use crate::monitors::Monitor;
 use image::codecs::jpeg::JpegEncoder;
 use image::imageops::FilterType;
 use image::{DynamicImage, GenericImageView, RgbImage};
-use rayon::prelude::*;
 use std::path::{Path, PathBuf};
 use std::process::Command;
 
 /// Compose images to fill each monitor, save the result, and set it as the wallpaper.
-pub fn apply(assignments: &[(PathBuf, Monitor)]) -> Result<(), String> {
+pub fn apply(assignments: &[(PathBuf, Monitor)], log: &dyn Fn(&str)) -> Result<(), String> {
     let canvas_w: u32 = assignments
         .iter()
         .map(|(_, m)| m.x + m.width)
@@ -19,15 +18,16 @@ pub fn apply(assignments: &[(PathBuf, Monitor)]) -> Result<(), String> {
         .max()
         .unwrap_or(0);
 
-    let tiles: Vec<(RgbImage, &Monitor)> = assignments
-        .par_iter()
-        .map(|(path, monitor)| {
-            let img = image::open(path)
-                .map_err(|e| format!("failed to open {}: {e}", path.display()))?;
-            Ok((cover_resize(&img, monitor.width, monitor.height), monitor))
-        })
-        .collect::<Result<Vec<_>, String>>()?;
+    let mut tiles = Vec::new();
+    for (path, monitor) in assignments {
+        let filename = path.file_name().unwrap_or_default().to_string_lossy();
+        log(&format!("Resizing {filename} for {}…", monitor.name));
+        let img = image::open(path)
+            .map_err(|e| format!("failed to open {}: {e}", path.display()))?;
+        tiles.push((cover_resize(&img, monitor.width, monitor.height), monitor));
+    }
 
+    log("Composing canvas…");
     let mut canvas = RgbImage::new(canvas_w, canvas_h);
     for (tile, monitor) in &tiles {
         image::imageops::overlay(
@@ -38,7 +38,10 @@ pub fn apply(assignments: &[(PathBuf, Monitor)]) -> Result<(), String> {
         );
     }
 
+    log("Saving wallpaper…");
     let save_path = save_composed(&canvas)?;
+
+    log("Setting wallpaper…");
     set_wallpaper(&save_path)
 }
 

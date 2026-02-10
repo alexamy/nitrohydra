@@ -29,8 +29,9 @@ struct App {
     loader: Option<ImageLoader>,
     selected: Vec<usize>,
     monitors: Vec<Monitor>,
-    apply_rx: Option<mpsc::Receiver<Result<(), String>>>,
+    apply_rx: Option<mpsc::Receiver<ApplyMsg>>,
     apply_status: Option<Result<(), String>>,
+    apply_log: String,
 }
 
 impl Default for App {
@@ -44,8 +45,14 @@ impl Default for App {
             monitors: Vec::new(),
             apply_rx: None,
             apply_status: None,
+            apply_log: String::new(),
         }
     }
+}
+
+enum ApplyMsg {
+    Status(String),
+    Done(Result<(), String>),
 }
 
 struct ImageEntry {
@@ -170,16 +177,23 @@ impl App {
 
     fn poll_apply(&mut self) {
         let Some(rx) = &self.apply_rx else { return };
-        match rx.try_recv() {
-            Ok(result) => {
-                self.apply_status = Some(result);
-                self.apply_rx = None;
+        loop {
+            match rx.try_recv() {
+                Ok(ApplyMsg::Status(msg)) => self.apply_log = msg,
+                Ok(ApplyMsg::Done(result)) => {
+                    self.apply_status = Some(result);
+                    self.apply_log.clear();
+                    self.apply_rx = None;
+                    break;
+                }
+                Err(mpsc::TryRecvError::Disconnected) => {
+                    self.apply_status = Some(Err("apply thread crashed".into()));
+                    self.apply_log.clear();
+                    self.apply_rx = None;
+                    break;
+                }
+                Err(mpsc::TryRecvError::Empty) => break,
             }
-            Err(mpsc::TryRecvError::Disconnected) => {
-                self.apply_status = Some(Err("apply thread crashed".into()));
-                self.apply_rx = None;
-            }
-            Err(mpsc::TryRecvError::Empty) => {}
         }
     }
 
@@ -187,8 +201,14 @@ impl App {
         let (tx, rx) = mpsc::channel();
         let ctx = ctx.clone();
         std::thread::spawn(move || {
-            let result = wallpaper::apply(&assignments);
-            let _ = tx.send(result);
+            let log_tx = tx.clone();
+            let log_ctx = ctx.clone();
+            let log = move |msg: &str| {
+                let _ = log_tx.send(ApplyMsg::Status(msg.to_string()));
+                log_ctx.request_repaint();
+            };
+            let result = wallpaper::apply(&assignments, &log);
+            let _ = tx.send(ApplyMsg::Done(result));
             ctx.request_repaint();
         });
 
@@ -254,6 +274,9 @@ impl App {
             ui.add_space(16.0);
             if self.apply_rx.is_some() {
                 ui.spinner();
+                if !self.apply_log.is_empty() {
+                    ui.weak(&self.apply_log);
+                }
             } else if ui.button("Apply").clicked() {
                 assignments = Some(
                     self.selected
