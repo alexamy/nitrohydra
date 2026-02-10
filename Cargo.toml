@@ -2,9 +2,15 @@
 name = "nitrohydra"
 version = "0.1.0"
 edition = "2024"
+repository = "https://github.com/alexamy/nitrohydra"
 
 [dependencies]
 eframe = { version = "0.30", features = ["persistence"] }
 image = { version = "0.25", features = ["jpeg", "png"] }
 md-5 = "0.10.6"
 rayon = "1.11.0"
+
+# The profile that 'dist' will build with
+[profile.dist]
+inherits = "release"
+lto = "thin"
