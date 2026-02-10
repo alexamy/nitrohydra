@@ -19,16 +19,19 @@ fn main() -> eframe::Result<()> {
         "nitrohydra",
         options,
         Box::new(|cc| {
-            let path = "/home/alex/Dropbox/Wallpapers".to_string();
-            let loader = ImageLoader::start(path.clone(), cc.egui_ctx.clone());
-            let monitors = monitors::detect().unwrap_or_default();
-            Ok(Box::new(App {
-                path,
-                state: State::Loading,
-                loader: Some(loader),
-                monitors,
+            let mut app = App {
+                path: cc
+                    .storage
+                    .and_then(|s| eframe::get_value(s, "path"))
+                    .unwrap_or_default(),
+                monitors: monitors::detect().unwrap_or_default(),
                 ..App::default()
-            }))
+            };
+            if !app.path.is_empty() {
+                app.loader = Some(ImageLoader::start(app.path.clone(), cc.egui_ctx.clone()));
+                app.state = State::Loading;
+            }
+            Ok(Box::new(app))
         }),
     )
 }
@@ -74,6 +77,10 @@ enum State {
 }
 
 impl eframe::App for App {
+    fn save(&mut self, storage: &mut dyn eframe::Storage) {
+        eframe::set_value(storage, "path", &self.path);
+    }
+
     fn update(&mut self, ctx: &egui::Context, _frame: &mut eframe::Frame) {
         self.poll_loader(ctx);
         self.poll_apply();
