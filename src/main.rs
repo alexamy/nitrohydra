@@ -196,55 +196,78 @@ impl App {
             return;
         }
 
-        let mut apply_assignments = None;
-
-        ui.horizontal(|ui| {
-            for (slot, &idx) in self.selected.iter().enumerate() {
-                let entry = &entries[idx];
-                ui.vertical(|ui| {
-                    ui.label(format!("#{}", slot + 1));
-                    ui.add(
-                        egui::Image::new(&entry.texture)
-                            .maintain_aspect_ratio(true)
-                            .fit_to_exact_size(egui::vec2(120.0, 120.0)),
-                    );
-                });
-            }
-
-            if self.selected.len() == 2 && self.monitors.len() >= 2 {
-                ui.vertical(|ui| {
-                    ui.add_space(16.0);
-                    let applying = self.apply_rx.is_some();
-                    if applying {
-                        ui.spinner();
-                    } else if ui.button("Apply").clicked() {
-                        // Extract paths while we still hold the immutable borrow
-                        let assignments: Vec<(PathBuf, Monitor)> = self
-                            .selected
-                            .iter()
-                            .zip(self.monitors.iter())
-                            .map(|(&idx, monitor)| {
-                                let path = PathBuf::from(entries[idx].texture.name());
-                                (path, monitor.clone())
-                            })
-                            .collect();
-                        apply_assignments = Some(assignments);
-                    }
-
-                    if let Some(status) = &self.apply_status {
-                        match status {
-                            Ok(()) => { ui.label("Applied!"); }
-                            Err(e) => { ui.colored_label(egui::Color32::RED, e); }
-                        }
-                    }
-                });
-            }
-        });
-
-        if let Some(assignments) = apply_assignments {
+        if let Some(assignments) = self.show_selection_row(ui, entries) {
             let ctx = ui.ctx().clone();
             self.start_apply(assignments, &ctx);
         }
+    }
+
+    fn show_selection_row(
+        &self,
+        ui: &mut egui::Ui,
+        entries: &[ImageEntry],
+    ) -> Option<Vec<(PathBuf, Monitor)>> {
+        let mut assignments = None;
+
+        ui.horizontal(|ui| {
+            self.show_selection_previews(ui, entries);
+            assignments = self.show_apply_button(ui, entries);
+        });
+
+        assignments
+    }
+
+    fn show_selection_previews(&self, ui: &mut egui::Ui, entries: &[ImageEntry]) {
+        for (slot, &idx) in self.selected.iter().enumerate() {
+            let entry = &entries[idx];
+            ui.vertical(|ui| {
+                ui.label(format!("#{}", slot + 1));
+                ui.add(
+                    egui::Image::new(&entry.texture)
+                        .maintain_aspect_ratio(true)
+                        .fit_to_exact_size(egui::vec2(120.0, 120.0)),
+                );
+            });
+        }
+    }
+
+    fn show_apply_button(
+        &self,
+        ui: &mut egui::Ui,
+        entries: &[ImageEntry],
+    ) -> Option<Vec<(PathBuf, Monitor)>> {
+        if self.selected.len() != 2 || self.monitors.len() < 2 {
+            return None;
+        }
+
+        let mut assignments = None;
+
+        ui.vertical(|ui| {
+            ui.add_space(16.0);
+            if self.apply_rx.is_some() {
+                ui.spinner();
+            } else if ui.button("Apply").clicked() {
+                assignments = Some(
+                    self.selected
+                        .iter()
+                        .zip(self.monitors.iter())
+                        .map(|(&idx, monitor)| {
+                            let path = PathBuf::from(entries[idx].texture.name());
+                            (path, monitor.clone())
+                        })
+                        .collect(),
+                );
+            }
+
+            if let Some(status) = &self.apply_status {
+                match status {
+                    Ok(()) => { ui.label("Applied!"); }
+                    Err(e) => { ui.colored_label(egui::Color32::RED, e); }
+                }
+            }
+        });
+
+        assignments
     }
 
     fn show_gallery(&mut self, ui: &mut egui::Ui) {
