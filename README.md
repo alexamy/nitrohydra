@@ -27,6 +27,15 @@ cargo build --release
 ./target/release/nitrohydra
 ```
 
+## Release
+
+```
+git commit -am "release: 0.2.0"
+git tag "v0.2.0"
+git push
+git push --tags
+```
+
 ## Built with ❤️
 
 This project was built by a human and [Claude Code](https://claude.com/claude-code) working together.
