@@ -119,13 +119,10 @@ impl App {
     }
 
     fn show_gallery(&mut self, ui: &mut egui::Ui) {
-        let thumb_size = self.thumb_size;
         let loading = self.loader.is_some();
-        let mut clicked_index: Option<usize> = None;
 
         match &self.state {
-            State::Empty => {}
-            State::Loading => {}
+            State::Empty | State::Loading => {}
             State::Error(e) => {
                 ui.colored_label(egui::Color32::RED, e);
             }
@@ -134,51 +131,46 @@ impl App {
             }
             State::Images(textures) if textures.is_empty() => {}
             State::Images(textures) => {
-                egui::ScrollArea::vertical()
-                    .max_width(f32::INFINITY)
-                    .show(ui, |ui| {
-                        ui.horizontal_wrapped(|ui| {
-                            for (i, texture) in textures.iter().enumerate() {
-                                let response = ui.add(
-                                    egui::Image::new(texture)
-                                        .maintain_aspect_ratio(true)
-                                        .fit_to_exact_size(egui::vec2(thumb_size, thumb_size))
-                                        .sense(egui::Sense::click()),
-                                );
-
-                                if let Some(sel_pos) =
-                                    self.selected.iter().position(|&idx| idx == i)
-                                {
-                                    let num = sel_pos + 1;
-                                    let painter = ui.painter();
-                                    let center =
-                                        response.rect.left_top() + egui::vec2(16.0, 16.0);
-                                    painter.circle_filled(
-                                        center,
-                                        14.0,
-                                        egui::Color32::from_rgba_unmultiplied(0, 0, 0, 180),
-                                    );
-                                    painter.text(
-                                        center,
-                                        egui::Align2::CENTER_CENTER,
-                                        num.to_string(),
-                                        egui::FontId::proportional(20.0),
-                                        egui::Color32::WHITE,
-                                    );
-                                }
-
-                                if response.clicked() {
-                                    clicked_index = Some(i);
-                                }
-                            }
-                        });
-                    });
+                let clicked = self.show_image_grid(ui, textures);
+                if let Some(i) = clicked {
+                    self.handle_image_click(i);
+                }
             }
         }
+    }
 
-        if let Some(i) = clicked_index {
-            self.handle_image_click(i);
-        }
+    fn show_image_grid(
+        &self,
+        ui: &mut egui::Ui,
+        textures: &[egui::TextureHandle],
+    ) -> Option<usize> {
+        let thumb_size = self.thumb_size;
+        let mut clicked_index = None;
+
+        egui::ScrollArea::vertical()
+            .max_width(f32::INFINITY)
+            .show(ui, |ui| {
+                ui.horizontal_wrapped(|ui| {
+                    for (i, texture) in textures.iter().enumerate() {
+                        let response = ui.add(
+                            egui::Image::new(texture)
+                                .maintain_aspect_ratio(true)
+                                .fit_to_exact_size(egui::vec2(thumb_size, thumb_size))
+                                .sense(egui::Sense::click()),
+                        );
+
+                        if let Some(pos) = self.selected.iter().position(|&idx| idx == i) {
+                            paint_selection_badge(ui, response.rect, pos + 1);
+                        }
+
+                        if response.clicked() {
+                            clicked_index = Some(i);
+                        }
+                    }
+                });
+            });
+
+        clicked_index
     }
 
     fn handle_image_click(&mut self, index: usize) {
@@ -194,4 +186,17 @@ impl App {
             self.selected.push(index);
         }
     }
+}
+
+fn paint_selection_badge(ui: &egui::Ui, rect: egui::Rect, num: usize) {
+    let center = rect.left_top() + egui::vec2(16.0, 16.0);
+    let painter = ui.painter();
+    painter.circle_filled(center, 14.0, egui::Color32::from_rgba_unmultiplied(0, 0, 0, 180));
+    painter.text(
+        center,
+        egui::Align2::CENTER_CENTER,
+        num.to_string(),
+        egui::FontId::proportional(20.0),
+        egui::Color32::WHITE,
+    );
 }
