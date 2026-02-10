@@ -3,6 +3,8 @@ mod loader;
 
 use core::f32;
 
+use std::path::Path;
+
 use eframe::egui;
 use loader::{ImageLoader, Poll};
 
@@ -163,6 +165,10 @@ impl App {
                             paint_selection_badge(ui, response.rect, pos + 1);
                         }
 
+                        response.clone().on_hover_ui(|ui| {
+                            show_image_tooltip(ui, texture);
+                        });
+
                         if response.clicked() {
                             clicked_index = Some(i);
                         }
@@ -199,4 +205,15 @@ fn paint_selection_badge(ui: &egui::Ui, rect: egui::Rect, num: usize) {
         egui::FontId::proportional(20.0),
         egui::Color32::WHITE,
     );
+}
+
+fn show_image_tooltip(ui: &mut egui::Ui, texture: &egui::TextureHandle) {
+    let full_path = texture.name();
+    let path = Path::new(&full_path);
+    let name = path
+        .file_name()
+        .map(|n| n.to_string_lossy())
+        .unwrap_or_default();
+    let [w, h] = texture.size();
+    ui.label(format!("{name}\n{w} × {h}\n{full_path}"));
 }
