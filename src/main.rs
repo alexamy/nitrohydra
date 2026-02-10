@@ -1,6 +1,8 @@
 mod cache;
 mod loader;
 
+use core::f32;
+
 use eframe::egui;
 use loader::{ImageLoader, Poll};
 
@@ -128,17 +130,19 @@ impl App {
             }
             State::Images(textures) if textures.is_empty() => {}
             State::Images(textures) => {
-                egui::ScrollArea::vertical().show(ui, |ui| {
-                    ui.horizontal_wrapped(|ui| {
-                        for texture in textures {
-                            ui.add(
-                                egui::Image::new(texture)
-                                    .maintain_aspect_ratio(true)
-                                    .fit_to_exact_size(egui::vec2(thumb_size, thumb_size)),
-                            );
-                        }
+                egui::ScrollArea::vertical()
+                    .max_width(f32::INFINITY)
+                    .show(ui, |ui| {
+                        ui.horizontal_wrapped(|ui| {
+                            for texture in textures {
+                                ui.add(
+                                    egui::Image::new(texture)
+                                        .maintain_aspect_ratio(true)
+                                        .fit_to_exact_size(egui::vec2(thumb_size, thumb_size)),
+                                );
+                            }
+                        });
                     });
-                });
             }
         }
     }
