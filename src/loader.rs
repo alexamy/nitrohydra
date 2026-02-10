@@ -8,7 +8,7 @@ use std::sync::{mpsc, Arc};
 const IMAGE_EXTENSIONS: &[&str] = &["jpg", "jpeg", "png"];
 const MAX_TEXTURE_SIZE: u32 = 512;
 
-pub struct LoadResultData {
+pub struct LoadResult {
     pub index: usize,
     pub name: String,
     pub image: egui::ColorImage,
@@ -16,16 +16,16 @@ pub struct LoadResultData {
 }
 
 pub enum Poll {
-    Image(LoadResultData),
+    Image(LoadResult),
     Error(String),
     Pending,
     Done,
 }
 
-type LoadResult = Result<LoadResultData, String>;
+type LoadResultPayload = Result<LoadResult, String>;
 
 pub struct ImageLoader {
-    rx: mpsc::Receiver<LoadResult>,
+    rx: mpsc::Receiver<LoadResultPayload>,
     cancelled: Arc<AtomicBool>,
 }
 
@@ -48,7 +48,7 @@ impl ImageLoader {
 
     pub fn poll(&self) -> Poll {
         match self.rx.try_recv() {
-            Ok(Ok(LoadResultData { index, name, image, dimensions })) => Poll::Image(LoadResultData { index, name, image, dimensions }),
+            Ok(Ok(LoadResult { index, name, image, dimensions })) => Poll::Image(LoadResult { index, name, image, dimensions }),
             Ok(Err(e)) => Poll::Error(e),
             Err(mpsc::TryRecvError::Empty) => Poll::Pending,
             Err(mpsc::TryRecvError::Disconnected) => Poll::Done,
@@ -58,7 +58,7 @@ impl ImageLoader {
 
 fn decode(
     path: &str,
-    tx: mpsc::SyncSender<LoadResult>,
+    tx: mpsc::SyncSender<LoadResultPayload>,
     ctx: egui::Context,
     cancelled: Arc<AtomicBool>,
 ) {
@@ -88,7 +88,7 @@ fn decode(
         if cancelled.load(Ordering::Relaxed) { return; }
         let Ok((image, dimensions)) = load_image(path) else { return };
         let name = path.to_string_lossy().into_owned();
-        if tx.send(Ok(LoadResultData { index: *index, name, image, dimensions })).is_ok() {
+        if tx.send(Ok(LoadResult { index: *index, name, image, dimensions })).is_ok() {
             ctx.request_repaint();
         }
     });
