@@ -1,4 +1,5 @@
 use crate::monitors::Monitor;
+use image::codecs::jpeg::JpegEncoder;
 use image::imageops::FilterType;
 use image::{DynamicImage, GenericImageView, RgbImage};
 use std::path::{Path, PathBuf};
@@ -61,9 +62,12 @@ fn save_composed(canvas: &RgbImage) -> Result<PathBuf, String> {
     std::fs::create_dir_all(&cache_dir)
         .map_err(|e| format!("failed to create cache dir: {e}"))?;
 
-    let path = cache_dir.join("_composed.png");
+    let path = cache_dir.join("_composed.jpg");
+    let file = std::fs::File::create(&path)
+        .map_err(|e| format!("failed to create wallpaper file: {e}"))?;
+    let encoder = JpegEncoder::new_with_quality(file, 95);
     canvas
-        .save(&path)
+        .write_with_encoder(encoder)
         .map_err(|e| format!("failed to save wallpaper: {e}"))?;
     Ok(path)
 }
