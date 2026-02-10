@@ -60,12 +60,22 @@ struct ImageEntry {
     original_size: [u32; 2],
 }
 
+impl Clone for ImageEntry {
+    fn clone(&self) -> Self {
+        Self {
+            texture: self.texture.clone(),
+            original_size: self.original_size,
+        }
+    }
+}
+
 #[derive(Default)]
 enum State {
     #[default]
     Empty,
     Loading,
     Error(String),
+    PartialImages(Vec<(usize, ImageEntry)>),
     Images(Vec<ImageEntry>),
 }
 
@@ -114,15 +124,15 @@ impl App {
         if let Some(loader) = &self.loader {
             loop {
                 match loader.poll() {
-                    Poll::Image(name, img, original_size) => {
-                        let texture = ctx.load_texture(name, img, Default::default());
+                    Poll::Image(index, name, image, original_size) => {
+                        let texture = ctx.load_texture(name, image, Default::default());
                         let entry = ImageEntry {
                             texture,
                             original_size,
                         };
                         match &mut self.state {
-                            State::Images(v) => v.push(entry),
-                            _ => self.state = State::Images(vec![entry]),
+                            State::PartialImages(v) => v.push((index, entry)),
+                            _ => self.state = State::PartialImages(vec![(index, entry)]),
                         }
                     }
                     Poll::Error(e) => {
@@ -132,9 +142,17 @@ impl App {
                     }
                     Poll::Pending => break,
                     Poll::Done => {
-                        if !matches!(&self.state, State::Images(v) if !v.is_empty()) {
-                            self.state = State::Images(vec![]);
+                        if !matches!(&self.state, State::PartialImages(v) if !v.is_empty()) {
+                            self.state = State::PartialImages(vec![]);
                         }
+                        self.state = match &self.state {
+                            State::PartialImages(v) => {
+                                let mut entries = v.clone();
+                                entries.sort_by_key(|(index, _)| *index);
+                                State::Images(entries.into_iter().map(|(_, entry)| entry.clone()).collect())
+                            }
+                            _ => State::Images(vec![]),
+                        };
                         self.loader = None;
                         break;
                     }
@@ -309,7 +327,7 @@ impl App {
         let loading = self.loader.is_some();
 
         match &self.state {
-            State::Empty | State::Loading => {}
+            State::Empty | State::Loading | State::PartialImages(_) => {}
             State::Error(e) => {
                 ui.colored_label(egui::Color32::RED, e);
             }

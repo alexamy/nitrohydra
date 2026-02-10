@@ -9,13 +9,14 @@ const IMAGE_EXTENSIONS: &[&str] = &["jpg", "jpeg", "png"];
 const MAX_TEXTURE_SIZE: u32 = 512;
 
 pub enum Poll {
-    Image(String, egui::ColorImage, [u32; 2]),
+    Image(usize, String, egui::ColorImage, [u32; 2]),
     Error(String),
     Pending,
     Done,
 }
 
 pub struct LoadResultData {
+    index: usize,
     name: String,
     image: egui::ColorImage,
     dimensions: [u32; 2],
@@ -47,7 +48,7 @@ impl ImageLoader {
 
     pub fn poll(&self) -> Poll {
         match self.rx.try_recv() {
-            Ok(Ok(LoadResultData { name, image, dimensions })) => Poll::Image(name, image, dimensions),
+            Ok(Ok(LoadResultData { index, name, image, dimensions })) => Poll::Image(index, name, image, dimensions),
             Ok(Err(e)) => Poll::Error(e),
             Err(mpsc::TryRecvError::Empty) => Poll::Pending,
             Err(mpsc::TryRecvError::Disconnected) => Poll::Done,
@@ -70,7 +71,7 @@ fn decode(
         }
     };
 
-    let paths: Vec<PathBuf> = entries
+    let paths: Vec<(usize, PathBuf)> = entries
         .filter_map(|e| e.ok())
         .map(|e| e.path())
         .filter(|p| {
@@ -80,13 +81,14 @@ fn decode(
                     .map(|ext| IMAGE_EXTENSIONS.contains(&ext.to_lowercase().as_str()))
                     .unwrap_or(false)
         })
+        .enumerate()
         .collect();
 
-    paths.par_iter().for_each_with(tx, |tx, path| {
+    paths.par_iter().for_each_with(tx, |tx, (index, path)| {
         if cancelled.load(Ordering::Relaxed) { return; }
-        let Ok((color_image, dims)) = load_image(path) else { return };
+        let Ok((image, dimensions)) = load_image(path) else { return };
         let name = path.to_string_lossy().into_owned();
-        if tx.send(Ok(LoadResultData { name, image: color_image, dimensions: dims })).is_ok() {
+        if tx.send(Ok(LoadResultData { index: *index, name, image, dimensions })).is_ok() {
             ctx.request_repaint();
         }
     });
