@@ -16,9 +16,13 @@ fn main() -> eframe::Result<()> {
     eframe::run_native(
         "nitrohydra",
         options,
-        Box::new(|_cc| {
+        Box::new(|cc| {
+            let path = "/home/alex/Dropbox/Wallpapers".to_string();
+            let loader = ImageLoader::start(path.clone(), cc.egui_ctx.clone());
             Ok(Box::new(App {
-                path: "/home/alex/Dropbox/Wallpapers".to_string(),
+                path,
+                state: State::Loading,
+                loader: Some(loader),
                 ..App::default()
             }))
         }),
