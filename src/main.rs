@@ -13,7 +13,7 @@ fn main() -> eframe::Result<()> {
         options,
         Box::new(|_cc| {
             Ok(Box::new(App {
-                path: "/home/alex/Pictures/nitrohydra".to_string(),
+                path: "/home/alex/Dropbox/Wallpapers".to_string(),
                 ..App::default()
             }))
         }),

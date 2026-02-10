@@ -1,8 +1,10 @@
 use eframe::egui;
+use rayon::prelude::*;
 use std::path::PathBuf;
 use std::sync::mpsc;
 
 const IMAGE_EXTENSIONS: &[&str] = &["jpg", "jpeg", "png"];
+const MAX_TEXTURE_SIZE: u32 = 512;
 
 pub enum Poll {
     Image(String, egui::ColorImage),
@@ -19,7 +21,7 @@ impl ImageLoader {
     pub fn start(path: String, ctx: egui::Context) -> Self {
         let (tx, rx) = mpsc::channel();
         std::thread::spawn(move || {
-            decode(&path, &tx, &ctx);
+            decode(&path, tx, ctx);
         });
         Self { rx }
     }
@@ -36,8 +38,8 @@ impl ImageLoader {
 
 fn decode(
     path: &str,
-    tx: &mpsc::Sender<Result<(String, egui::ColorImage), String>>,
-    ctx: &egui::Context,
+    tx: mpsc::Sender<Result<(String, egui::ColorImage), String>>,
+    ctx: egui::Context,
 ) {
     let entries = match std::fs::read_dir(path) {
         Ok(e) => e,
@@ -60,21 +62,21 @@ fn decode(
         })
         .collect();
 
-    for path in paths {
-        let img = match image::open(&path) {
+    paths.par_iter().for_each_with(tx, |tx, path| {
+        let img = match image::open(path) {
             Ok(img) => img,
             Err(e) => {
                 eprintln!("Failed to load {}: {e}", path.display());
-                continue;
+                return;
             }
         };
+        let img = img.thumbnail(MAX_TEXTURE_SIZE, MAX_TEXTURE_SIZE);
         let rgba = img.to_rgba8();
         let size = [img.width() as usize, img.height() as usize];
         let color_image = egui::ColorImage::from_rgba_unmultiplied(size, rgba.as_raw());
         let name = path.to_string_lossy().into_owned();
-        if tx.send(Ok((name, color_image))).is_err() {
-            break;
+        if tx.send(Ok((name, color_image))).is_ok() {
+            ctx.request_repaint();
         }
-        ctx.request_repaint();
-    }
+    });
 }

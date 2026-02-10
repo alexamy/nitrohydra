@@ -2248,6 +2248,7 @@ dependencies = [
  "eframe",
  "egui_extras",
  "image",
+ "rayon",
 ]
 
 [[package]]
