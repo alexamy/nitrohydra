@@ -64,7 +64,7 @@ fn decode(
         .collect();
 
     paths.par_iter().for_each_with(tx, |tx, path| {
-        let color_image = load_image(path);
+        let Ok(color_image) = load_image(path) else { return };
         let name = path.to_string_lossy().into_owned();
         if tx.send(Ok((name, color_image))).is_ok() {
             ctx.request_repaint();
@@ -72,12 +72,12 @@ fn decode(
     });
 }
 
-fn load_image(path: &Path) -> egui::ColorImage {
+fn load_image(path: &Path) -> Result<egui::ColorImage, image::ImageError> {
     if let Some(cached) = cache::load(path) {
-        return cached;
+        return Ok(cached);
     }
-    let img = image::open(path).unwrap_or_else(|_| image::DynamicImage::new_rgba8(1, 1));
+    let img = image::open(path)?;
     let thumbnail = img.thumbnail(MAX_TEXTURE_SIZE, MAX_TEXTURE_SIZE);
     cache::save(path, &thumbnail);
-    cache::to_color_image(&thumbnail)
+    Ok(cache::to_color_image(&thumbnail))
 }
