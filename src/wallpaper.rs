@@ -2,6 +2,7 @@ use crate::monitors::Monitor;
 use image::codecs::jpeg::JpegEncoder;
 use image::imageops::FilterType;
 use image::{DynamicImage, GenericImageView, RgbImage};
+use rayon::prelude::*;
 use std::path::{Path, PathBuf};
 use std::process::Command;
 
@@ -18,15 +19,20 @@ pub fn apply(assignments: &[(PathBuf, Monitor)]) -> Result<(), String> {
         .max()
         .unwrap_or(0);
 
+    let tiles: Vec<(RgbImage, &Monitor)> = assignments
+        .par_iter()
+        .map(|(path, monitor)| {
+            let img = image::open(path)
+                .map_err(|e| format!("failed to open {}: {e}", path.display()))?;
+            Ok((cover_resize(&img, monitor.width, monitor.height), monitor))
+        })
+        .collect::<Result<Vec<_>, String>>()?;
+
     let mut canvas = RgbImage::new(canvas_w, canvas_h);
-
-    for (path, monitor) in assignments {
-        let img = image::open(path).map_err(|e| format!("failed to open {}: {e}", path.display()))?;
-        let cropped = cover_resize(&img, monitor.width, monitor.height);
-
+    for (tile, monitor) in &tiles {
         image::imageops::overlay(
             &mut canvas,
-            &cropped,
+            tile,
             i64::from(monitor.x),
             i64::from(monitor.y),
         );
@@ -48,7 +54,7 @@ fn cover_resize(img: &DynamicImage, target_w: u32, target_h: u32) -> RgbImage {
     let scaled_w = (f64::from(src_w) * scale).ceil() as u32;
     let scaled_h = (f64::from(src_h) * scale).ceil() as u32;
 
-    let resized = img.resize_exact(scaled_w, scaled_h, FilterType::Lanczos3);
+    let resized = img.resize_exact(scaled_w, scaled_h, FilterType::CatmullRom);
 
     // Center-crop to target dimensions
     let crop_x = (scaled_w.saturating_sub(target_w)) / 2;
@@ -62,14 +68,20 @@ fn save_composed(canvas: &RgbImage) -> Result<PathBuf, String> {
     std::fs::create_dir_all(&cache_dir)
         .map_err(|e| format!("failed to create cache dir: {e}"))?;
 
-    let path = cache_dir.join("_composed.jpg");
-    let file = std::fs::File::create(&path)
+    let tmp_path = cache_dir.join("_composed.tmp");
+    let final_path = cache_dir.join("_composed.jpg");
+
+    let file = std::fs::File::create(&tmp_path)
         .map_err(|e| format!("failed to create wallpaper file: {e}"))?;
     let encoder = JpegEncoder::new_with_quality(file, 95);
     canvas
         .write_with_encoder(encoder)
         .map_err(|e| format!("failed to save wallpaper: {e}"))?;
-    Ok(path)
+
+    std::fs::rename(&tmp_path, &final_path)
+        .map_err(|e| format!("failed to rename wallpaper file: {e}"))?;
+
+    Ok(final_path)
 }
 
 fn set_wallpaper(path: &Path) -> Result<(), String> {
