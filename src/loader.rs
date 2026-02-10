@@ -2,7 +2,8 @@ use crate::cache;
 use eframe::egui;
 use rayon::prelude::*;
 use std::path::{Path, PathBuf};
-use std::sync::mpsc;
+use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::{mpsc, Arc};
 
 const IMAGE_EXTENSIONS: &[&str] = &["jpg", "jpeg", "png"];
 const MAX_TEXTURE_SIZE: u32 = 512;
@@ -16,15 +17,24 @@ pub enum Poll {
 
 pub struct ImageLoader {
     rx: mpsc::Receiver<Result<(String, egui::ColorImage), String>>,
+    cancelled: Arc<AtomicBool>,
+}
+
+impl Drop for ImageLoader {
+    fn drop(&mut self) {
+        self.cancelled.store(true, Ordering::Relaxed);
+    }
 }
 
 impl ImageLoader {
     pub fn start(path: String, ctx: egui::Context) -> Self {
         let (tx, rx) = mpsc::sync_channel(32);
+        let cancelled = Arc::new(AtomicBool::new(false));
+        let cancelled_clone = Arc::clone(&cancelled);
         std::thread::spawn(move || {
-            decode(&path, tx, ctx);
+            decode(&path, tx, ctx, cancelled_clone);
         });
-        Self { rx }
+        Self { rx, cancelled }
     }
 
     pub fn poll(&self) -> Poll {
@@ -41,6 +51,7 @@ fn decode(
     path: &str,
     tx: mpsc::SyncSender<Result<(String, egui::ColorImage), String>>,
     ctx: egui::Context,
+    cancelled: Arc<AtomicBool>,
 ) {
     let entries = match std::fs::read_dir(path) {
         Ok(e) => e,
@@ -64,6 +75,7 @@ fn decode(
         .collect();
 
     paths.par_iter().for_each_with(tx, |tx, path| {
+        if cancelled.load(Ordering::Relaxed) { return; }
         let Ok(color_image) = load_image(path) else { return };
         let name = path.to_string_lossy().into_owned();
         if tx.send(Ok((name, color_image))).is_ok() {
