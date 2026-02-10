@@ -150,6 +150,19 @@ impl App {
             if self.loader.is_some() {
                 ui.spinner();
             }
+
+            if !self.monitors.is_empty() {
+                let text: String = self
+                    .monitors
+                    .iter()
+                    .enumerate()
+                    .map(|(i, m)| format!("#{} {} — {}×{}", i + 1, m.name, m.width, m.height))
+                    .collect::<Vec<_>>()
+                    .join(", ");
+                ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+                    ui.weak(&text);
+                });
+            }
         });
     }
 
