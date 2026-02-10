@@ -358,12 +358,12 @@ impl App {
 
     fn handle_image_click(&mut self, index: usize) {
         self.apply_status = None;
-        if let Some(sel_pos) = self.selected.iter().position(|&idx| idx == index) {
-            self.selected.remove(sel_pos);
-        } else if self.selected.len() < 2 {
+        if let Some(_) = self.selected.iter().position(|&idx| idx == index) {
+            self.selected.swap(0, 1);
+        } else if self.selected.len() == 2 {
+            self.selected.remove(1);
             self.selected.push(index);
         } else {
-            self.selected.clear();
             self.selected.push(index);
         }
     }
