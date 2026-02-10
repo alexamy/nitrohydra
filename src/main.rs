@@ -8,7 +8,10 @@ fn main() -> eframe::Result<()> {
         options,
         Box::new(|cc| {
             egui_extras::install_image_loaders(&cc.egui_ctx);
-            Ok(Box::new(App::default()))
+            Ok(Box::new(App {
+                path: "/home/alex/Pictures/nitrohydra".to_string(),
+                state: State::default(),
+            }))
         }),
     )
 }
@@ -57,10 +60,7 @@ impl eframe::App for App {
                         ui.horizontal_wrapped(|ui| {
                             for path in images {
                                 let uri = format!("file://{}", path.display());
-                                ui.add(
-                                    egui::Image::new(uri)
-                                        .max_size(egui::vec2(150.0, 150.0)),
-                                );
+                                ui.add(egui::Image::new(uri).max_size(egui::vec2(150.0, 150.0)));
                             }
                         });
                     });
@@ -70,9 +70,7 @@ impl eframe::App for App {
     }
 }
 
-const IMAGE_EXTENSIONS: &[&str] = &[
-    "jpg", "jpeg", "png", "gif", "webp", "bmp", "tiff", "tif",
-];
+const IMAGE_EXTENSIONS: &[&str] = &["jpg", "jpeg", "png"];
 
 fn read_images(path: &str) -> Result<Vec<PathBuf>, String> {
     let entries = std::fs::read_dir(path).map_err(|e| format!("Error: {e}"))?;
