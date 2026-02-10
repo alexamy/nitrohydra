@@ -28,6 +28,7 @@ struct App {
     state: State,
     thumb_size: f32,
     loader: Option<ImageLoader>,
+    selected: Vec<usize>,
 }
 
 impl Default for App {
@@ -37,6 +38,7 @@ impl Default for App {
             state: State::default(),
             thumb_size: 150.0,
             loader: None,
+            selected: Vec::new(),
         }
     }
 }
@@ -101,6 +103,7 @@ impl App {
             if clicked {
                 self.loader = Some(ImageLoader::start(self.path.clone(), ui.ctx().clone()));
                 self.state = State::Loading;
+                self.selected.clear();
             }
         });
     }
@@ -115,9 +118,10 @@ impl App {
         });
     }
 
-    fn show_gallery(&self, ui: &mut egui::Ui) {
+    fn show_gallery(&mut self, ui: &mut egui::Ui) {
         let thumb_size = self.thumb_size;
         let loading = self.loader.is_some();
+        let mut clicked_index: Option<usize> = None;
 
         match &self.state {
             State::Empty => {}
@@ -134,16 +138,60 @@ impl App {
                     .max_width(f32::INFINITY)
                     .show(ui, |ui| {
                         ui.horizontal_wrapped(|ui| {
-                            for texture in textures {
-                                ui.add(
+                            for (i, texture) in textures.iter().enumerate() {
+                                let response = ui.add(
                                     egui::Image::new(texture)
                                         .maintain_aspect_ratio(true)
-                                        .fit_to_exact_size(egui::vec2(thumb_size, thumb_size)),
+                                        .fit_to_exact_size(egui::vec2(thumb_size, thumb_size))
+                                        .sense(egui::Sense::click()),
                                 );
+
+                                if let Some(sel_pos) =
+                                    self.selected.iter().position(|&idx| idx == i)
+                                {
+                                    let num = sel_pos + 1;
+                                    let painter = ui.painter();
+                                    let center =
+                                        response.rect.left_top() + egui::vec2(16.0, 16.0);
+                                    painter.circle_filled(
+                                        center,
+                                        14.0,
+                                        egui::Color32::from_rgba_unmultiplied(0, 0, 0, 180),
+                                    );
+                                    painter.text(
+                                        center,
+                                        egui::Align2::CENTER_CENTER,
+                                        num.to_string(),
+                                        egui::FontId::proportional(20.0),
+                                        egui::Color32::WHITE,
+                                    );
+                                }
+
+                                if response.clicked() {
+                                    clicked_index = Some(i);
+                                }
                             }
                         });
                     });
             }
+        }
+
+        if let Some(i) = clicked_index {
+            self.handle_image_click(i);
+        }
+    }
+
+    fn handle_image_click(&mut self, index: usize) {
+        if let Some(sel_pos) = self.selected.iter().position(|&idx| idx == index) {
+            // Already selected — deselect it; if it was #1, #2 shifts down
+            self.selected.remove(sel_pos);
+        } else if self.selected.len() < 2 {
+            // Room for another selection
+            self.selected.push(index);
+        } else {
+            // Both slots full — cycle: start fresh with this as #1
+            self.selected.clear();
+            self.selected.push(index);
         }
     }
 }
