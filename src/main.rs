@@ -67,6 +67,13 @@ impl eframe::App for App {
     fn update(&mut self, ctx: &egui::Context, _frame: &mut eframe::Frame) {
         self.poll_loader(ctx);
 
+        egui::TopBottomPanel::bottom("selection_panel")
+            .frame(
+                egui::Frame::side_top_panel(&ctx.style())
+                    .inner_margin(egui::Margin::symmetric(8.0, 12.0)),
+            )
+            .show_animated(ctx, !self.selected.is_empty(), |ui| self.show_selection(ui));
+
         egui::CentralPanel::default().show(ctx, |ui| {
             self.show_path_input(ui);
             self.show_size_slider(ui);
@@ -129,6 +136,37 @@ impl App {
             ui.add(egui::Slider::new(&mut self.thumb_size, 50.0..=400.0));
             if self.loader.is_some() {
                 ui.spinner();
+            }
+        });
+    }
+
+    fn show_selection(&self, ui: &mut egui::Ui) {
+        let State::Images(entries) = &self.state else {
+            return;
+        };
+        if self.selected.is_empty() {
+            return;
+        }
+
+        ui.horizontal(|ui| {
+            for (slot, &idx) in self.selected.iter().enumerate() {
+                let entry = &entries[idx];
+                ui.vertical(|ui| {
+                    ui.label(format!("#{}", slot + 1));
+                    ui.add(
+                        egui::Image::new(&entry.texture)
+                            .maintain_aspect_ratio(true)
+                            .fit_to_exact_size(egui::vec2(120.0, 120.0)),
+                    );
+                });
+            }
+
+            if self.selected.len() == 2 {
+                ui.vertical(|ui| {
+                    ui.add_space(16.0);
+                    // TODO: add apply handler
+                    let _ = ui.button("Apply");
+                });
             }
         });
     }
