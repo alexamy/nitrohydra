@@ -1,6 +1,9 @@
 # nitrohydra
 
-A multi-monitor wallpaper picker for Linux Cinnamon (X11).
+A multi-monitor wallpaper picker.
+
+> [!WARNING]
+> **Only supports Linux Cinnamon (X11).**
 
 Browse a folder of images, select one wallpaper per monitor, and apply them instantly. Nitrohydra composes a single spanned image behind the scenes, so each monitor gets its own wallpaper even though Cinnamon only supports a single background URI.
 
