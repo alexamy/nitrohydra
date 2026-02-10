@@ -20,7 +20,7 @@ pub struct ImageLoader {
 
 impl ImageLoader {
     pub fn start(path: String, ctx: egui::Context) -> Self {
-        let (tx, rx) = mpsc::channel();
+        let (tx, rx) = mpsc::sync_channel(32);
         std::thread::spawn(move || {
             decode(&path, tx, ctx);
         });
@@ -39,7 +39,7 @@ impl ImageLoader {
 
 fn decode(
     path: &str,
-    tx: mpsc::Sender<Result<(String, egui::ColorImage), String>>,
+    tx: mpsc::SyncSender<Result<(String, egui::ColorImage), String>>,
     ctx: egui::Context,
 ) {
     let entries = match std::fs::read_dir(path) {
