@@ -82,7 +82,7 @@ impl App {
                     }
                     Poll::Pending => break,
                     Poll::Done => {
-                        if matches!(self.state, State::Loading) {
+                        if !matches!(&self.state, State::Images(v) if !v.is_empty()) {
                             self.state = State::Images(vec![]);
                         }
                         self.loader = None;
