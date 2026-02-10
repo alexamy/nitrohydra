@@ -79,7 +79,10 @@ impl App {
                 match loader.poll() {
                     Poll::Image(name, img, original_size) => {
                         let texture = ctx.load_texture(name, img, Default::default());
-                        let entry = ImageEntry { texture, original_size };
+                        let entry = ImageEntry {
+                            texture,
+                            original_size,
+                        };
                         match &mut self.state {
                             State::Images(v) => v.push(entry),
                             _ => self.state = State::Images(vec![entry]),
@@ -199,7 +202,11 @@ impl App {
 fn paint_selection_badge(ui: &egui::Ui, rect: egui::Rect, num: usize) {
     let center = rect.left_top() + egui::vec2(16.0, 16.0);
     let painter = ui.painter();
-    painter.circle_filled(center, 14.0, egui::Color32::from_rgba_unmultiplied(0, 0, 0, 180));
+    painter.circle_filled(
+        center,
+        14.0,
+        egui::Color32::from_rgba_unmultiplied(0, 0, 0, 180),
+    );
     painter.text(
         center,
         egui::Align2::CENTER_CENTER,
@@ -217,5 +224,5 @@ fn show_image_tooltip(ui: &mut egui::Ui, entry: &ImageEntry) {
         .map(|n| n.to_string_lossy())
         .unwrap_or_default();
     let [w, h] = entry.original_size;
-    ui.label(format!("{name}\n{w} × {h}\n{full_path}"));
+    ui.label(format!("{name}\n{w} × {h}\n\n{full_path}"));
 }
