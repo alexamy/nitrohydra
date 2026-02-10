@@ -64,7 +64,7 @@ fn cover_resize(img: &DynamicImage, target_w: u32, target_h: u32) -> RgbImage {
 }
 
 fn save_composed(canvas: &RgbImage) -> Result<PathBuf, String> {
-    let cache_dir = dirs_cache().join("nitrohydra");
+    let cache_dir = dirs_data().join("nitrohydra");
     std::fs::create_dir_all(&cache_dir)
         .map_err(|e| format!("failed to create cache dir: {e}"))?;
 
@@ -120,12 +120,12 @@ fn gsettings_set(schema: &str, key: &str, value: &str) -> Result<(), String> {
     Ok(())
 }
 
-fn dirs_cache() -> PathBuf {
-    std::env::var_os("XDG_CACHE_HOME")
+fn dirs_data() -> PathBuf {
+    std::env::var_os("XDG_DATA_HOME")
         .map(PathBuf::from)
         .unwrap_or_else(|| {
             let mut home = PathBuf::from(std::env::var_os("HOME").unwrap_or_default());
-            home.push(".cache");
+            home.push(".local/share");
             home
         })
 }
