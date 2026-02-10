@@ -1,5 +1,7 @@
+mod loader;
+
 use eframe::egui;
-use std::sync::mpsc;
+use loader::{ImageLoader, Poll};
 
 fn main() -> eframe::Result<()> {
     let options = eframe::NativeOptions {
@@ -22,7 +24,7 @@ struct App {
     path: String,
     state: State,
     thumb_size: f32,
-    receiver: Option<mpsc::Receiver<Result<(String, egui::ColorImage), String>>>,
+    loader: Option<ImageLoader>,
 }
 
 impl Default for App {
@@ -31,7 +33,7 @@ impl Default for App {
             path: String::new(),
             state: State::default(),
             thumb_size: 150.0,
-            receiver: None,
+            loader: None,
         }
     }
 }
@@ -47,32 +49,7 @@ enum State {
 
 impl eframe::App for App {
     fn update(&mut self, ctx: &egui::Context, _frame: &mut eframe::Frame) {
-        if let Some(rx) = &self.receiver {
-            loop {
-                match rx.try_recv() {
-                    Ok(Ok((name, color_image))) => {
-                        let texture = ctx.load_texture(name, color_image, Default::default());
-                        match &mut self.state {
-                            State::Images(v) => v.push(texture),
-                            _ => self.state = State::Images(vec![texture]),
-                        }
-                    }
-                    Ok(Err(e)) => {
-                        self.state = State::Error(e);
-                        self.receiver = None;
-                        break;
-                    }
-                    Err(mpsc::TryRecvError::Empty) => break,
-                    Err(mpsc::TryRecvError::Disconnected) => {
-                        if matches!(self.state, State::Loading) {
-                            self.state = State::Images(vec![]);
-                        }
-                        self.receiver = None;
-                        break;
-                    }
-                }
-            }
-        }
+        self.poll_loader(ctx);
 
         egui::CentralPanel::default().show(ctx, |ui| {
             self.show_path_input(ui);
@@ -84,20 +61,43 @@ impl eframe::App for App {
 }
 
 impl App {
+    fn poll_loader(&mut self, ctx: &egui::Context) {
+        if let Some(loader) = &self.loader {
+            loop {
+                match loader.poll() {
+                    Poll::Image(name, img) => {
+                        let texture = ctx.load_texture(name, img, Default::default());
+                        match &mut self.state {
+                            State::Images(v) => v.push(texture),
+                            _ => self.state = State::Images(vec![texture]),
+                        }
+                    }
+                    Poll::Error(e) => {
+                        self.state = State::Error(e);
+                        self.loader = None;
+                        break;
+                    }
+                    Poll::Pending => break,
+                    Poll::Done => {
+                        if matches!(self.state, State::Loading) {
+                            self.state = State::Images(vec![]);
+                        }
+                        self.loader = None;
+                        break;
+                    }
+                }
+            }
+        }
+    }
+
     fn show_path_input(&mut self, ui: &mut egui::Ui) {
         ui.label("Directory path:");
         ui.horizontal(|ui| {
             let clicked = ui.button("Read").clicked();
             ui.add(egui::TextEdit::singleline(&mut self.path).desired_width(f32::INFINITY));
             if clicked {
-                let path = self.path.clone();
-                let ctx = ui.ctx().clone();
-                let (tx, rx) = mpsc::channel();
-                self.receiver = Some(rx);
+                self.loader = Some(ImageLoader::start(self.path.clone(), ui.ctx().clone()));
                 self.state = State::Loading;
-                std::thread::spawn(move || {
-                    decode_images(&path, &tx, &ctx);
-                });
             }
         });
     }
@@ -108,7 +108,7 @@ impl App {
 
     fn show_gallery(&self, ui: &mut egui::Ui) {
         let thumb_size = self.thumb_size;
-        let loading = self.receiver.is_some();
+        let loading = self.loader.is_some();
 
         match &self.state {
             State::Empty => {}
@@ -142,52 +142,5 @@ impl App {
                 });
             }
         }
-    }
-}
-
-const IMAGE_EXTENSIONS: &[&str] = &["jpg", "jpeg", "png"];
-
-fn decode_images(
-    path: &str,
-    tx: &mpsc::Sender<Result<(String, egui::ColorImage), String>>,
-    ctx: &egui::Context,
-) {
-    let entries = match std::fs::read_dir(path) {
-        Ok(e) => e,
-        Err(e) => {
-            let _ = tx.send(Err(format!("Error: {e}")));
-            ctx.request_repaint();
-            return;
-        }
-    };
-
-    let paths: Vec<_> = entries
-        .filter_map(|e| e.ok())
-        .map(|e| e.path())
-        .filter(|p| {
-            p.is_file()
-                && p.extension()
-                    .and_then(|ext| ext.to_str())
-                    .map(|ext| IMAGE_EXTENSIONS.contains(&ext.to_lowercase().as_str()))
-                    .unwrap_or(false)
-        })
-        .collect();
-
-    for path in paths {
-        let img = match image::open(&path) {
-            Ok(img) => img,
-            Err(e) => {
-                eprintln!("Failed to load {}: {e}", path.display());
-                continue;
-            }
-        };
-        let rgba = img.to_rgba8();
-        let size = [img.width() as usize, img.height() as usize];
-        let color_image = egui::ColorImage::from_rgba_unmultiplied(size, rgba.as_raw());
-        let name = path.to_string_lossy().into_owned();
-        if tx.send(Ok((name, color_image))).is_err() {
-            break; // receiver dropped — user clicked Read again
-        }
-        ctx.request_repaint();
     }
 }
