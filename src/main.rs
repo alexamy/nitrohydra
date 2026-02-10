@@ -1,3 +1,4 @@
+mod cache;
 mod loader;
 
 use eframe::egui;
