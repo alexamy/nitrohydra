@@ -3,8 +3,6 @@ mod loader;
 mod monitors;
 mod wallpaper;
 
-use core::f32;
-
 use std::path::{Path, PathBuf};
 use std::sync::mpsc;
 
@@ -167,11 +165,17 @@ impl App {
     }
 
     fn poll_apply(&mut self) {
-        if let Some(rx) = &self.apply_rx
-            && let Ok(result) = rx.try_recv()
-        {
-            self.apply_status = Some(result);
-            self.apply_rx = None;
+        let Some(rx) = &self.apply_rx else { return };
+        match rx.try_recv() {
+            Ok(result) => {
+                self.apply_status = Some(result);
+                self.apply_rx = None;
+            }
+            Err(mpsc::TryRecvError::Disconnected) => {
+                self.apply_status = Some(Err("apply thread crashed".into()));
+                self.apply_rx = None;
+            }
+            Err(mpsc::TryRecvError::Empty) => {}
         }
     }
 
@@ -311,13 +315,13 @@ impl App {
                             paint_selection_badge(ui, response.rect, pos + 1);
                         }
 
-                        response.clone().on_hover_ui(|ui| {
-                            show_image_tooltip(ui, entry);
-                        });
-
                         if response.clicked() {
                             clicked_index = Some(i);
                         }
+
+                        response.on_hover_ui(|ui| {
+                            show_image_tooltip(ui, entry);
+                        });
                     }
                 });
             });

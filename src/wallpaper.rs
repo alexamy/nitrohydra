@@ -44,8 +44,8 @@ fn cover_resize(img: &DynamicImage, target_w: u32, target_h: u32) -> RgbImage {
     let scale_h = f64::from(target_h) / f64::from(src_h);
     let scale = scale_w.max(scale_h);
 
-    let scaled_w = (f64::from(src_w) * scale).round() as u32;
-    let scaled_h = (f64::from(src_h) * scale).round() as u32;
+    let scaled_w = (f64::from(src_w) * scale).ceil() as u32;
+    let scaled_h = (f64::from(src_h) * scale).ceil() as u32;
 
     let resized = img.resize_exact(scaled_w, scaled_h, FilterType::Lanczos3);
 
@@ -77,13 +77,14 @@ fn set_wallpaper(path: &Path) -> Result<(), String> {
 }
 
 fn gsettings_set(key: &str, value: &str) -> Result<(), String> {
-    let status = Command::new("gsettings")
+    let output = Command::new("gsettings")
         .args(["set", "org.cinnamon.desktop.background", key, value])
-        .status()
+        .output()
         .map_err(|e| format!("failed to run gsettings: {e}"))?;
 
-    if !status.success() {
-        return Err(format!("gsettings set {key} failed"));
+    if !output.status.success() {
+        let stderr = String::from_utf8_lossy(&output.stderr);
+        return Err(format!("gsettings set {key} failed: {stderr}"));
     }
     Ok(())
 }

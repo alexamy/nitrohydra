@@ -17,6 +17,11 @@ pub fn detect() -> Result<Vec<Monitor>, String> {
         .output()
         .map_err(|e| format!("failed to run xrandr: {e}"))?;
 
+    if !output.status.success() {
+        let stderr = String::from_utf8_lossy(&output.stderr);
+        return Err(format!("xrandr failed: {stderr}"));
+    }
+
     let stdout = String::from_utf8_lossy(&output.stdout);
     let mut monitors = Vec::new();
 
