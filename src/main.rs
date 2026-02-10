@@ -103,7 +103,13 @@ impl App {
     }
 
     fn show_size_slider(&mut self, ui: &mut egui::Ui) {
-        ui.add(egui::Slider::new(&mut self.thumb_size, 50.0..=400.0).text("Size"));
+        ui.horizontal(|ui| {
+            ui.label("Size");
+            ui.add(egui::Slider::new(&mut self.thumb_size, 50.0..=400.0));
+            if self.loader.is_some() {
+                ui.spinner();
+            }
+        });
     }
 
     fn show_gallery(&self, ui: &mut egui::Ui) {
@@ -112,23 +118,15 @@ impl App {
 
         match &self.state {
             State::Empty => {}
-            State::Loading => {
-                ui.spinner();
-            }
+            State::Loading => {}
             State::Error(e) => {
                 ui.colored_label(egui::Color32::RED, e);
             }
-            State::Images(textures) if textures.is_empty() => {
-                if loading {
-                    ui.spinner();
-                } else {
-                    ui.label("No images found.");
-                }
+            State::Images(textures) if textures.is_empty() && !loading => {
+                ui.label("No images found.");
             }
+            State::Images(textures) if textures.is_empty() => {}
             State::Images(textures) => {
-                if loading {
-                    ui.spinner();
-                }
                 egui::ScrollArea::vertical().show(ui, |ui| {
                     ui.horizontal_wrapped(|ui| {
                         for texture in textures {
