@@ -15,7 +15,13 @@ pub enum Poll {
     Done,
 }
 
-type LoadResult = Result<(String, egui::ColorImage, [u32; 2]), String>;
+pub struct LoadResultData {
+    name: String,
+    image: egui::ColorImage,
+    dimensions: [u32; 2],
+}
+
+type LoadResult = Result<LoadResultData, String>;
 
 pub struct ImageLoader {
     rx: mpsc::Receiver<LoadResult>,
@@ -41,7 +47,7 @@ impl ImageLoader {
 
     pub fn poll(&self) -> Poll {
         match self.rx.try_recv() {
-            Ok(Ok((name, img, dims))) => Poll::Image(name, img, dims),
+            Ok(Ok(LoadResultData { name, image, dimensions })) => Poll::Image(name, image, dimensions),
             Ok(Err(e)) => Poll::Error(e),
             Err(mpsc::TryRecvError::Empty) => Poll::Pending,
             Err(mpsc::TryRecvError::Disconnected) => Poll::Done,
@@ -80,7 +86,7 @@ fn decode(
         if cancelled.load(Ordering::Relaxed) { return; }
         let Ok((color_image, dims)) = load_image(path) else { return };
         let name = path.to_string_lossy().into_owned();
-        if tx.send(Ok((name, color_image, dims))).is_ok() {
+        if tx.send(Ok(LoadResultData { name, image: color_image, dimensions: dims })).is_ok() {
             ctx.request_repaint();
         }
     });
