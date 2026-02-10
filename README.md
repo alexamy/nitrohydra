@@ -42,6 +42,10 @@ git push
 git push --tags
 ```
 
+## Contributing
+
+Contributions are welcome!
+
 ## Built with ❤️
 
 This project was built by a human and [Claude Code](https://claude.com/claude-code) working together.
