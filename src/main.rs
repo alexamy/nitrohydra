@@ -5,6 +5,7 @@ mod wallpaper;
 
 use std::path::{Path, PathBuf};
 use std::sync::mpsc;
+use std::time::SystemTime;
 
 use eframe::egui;
 use loader::{ImageLoader, Poll};
@@ -75,7 +76,7 @@ enum State {
     Empty,
     Loading,
     Error(String),
-    PartialImages(Vec<(usize, ImageEntry)>),
+    PartialImages(Vec<(SystemTime, ImageEntry)>),
     Images(Vec<ImageEntry>),
 }
 
@@ -124,15 +125,15 @@ impl App {
         if let Some(loader) = &self.loader {
             loop {
                 match loader.poll() {
-                    Poll::Image(index, name, image, dimensions) => {
+                    Poll::Image(modified, name, image, dimensions) => {
                         let texture = ctx.load_texture(name, image, Default::default());
                         let entry = ImageEntry {
                             texture,
                             original_size: dimensions,
                         };
                         match &mut self.state {
-                            State::PartialImages(v) => v.push((index, entry)),
-                            _ => self.state = State::PartialImages(vec![(index, entry)]),
+                            State::PartialImages(v) => v.push((modified, entry)),
+                            _ => self.state = State::PartialImages(vec![(modified, entry)]),
                         }
                     }
                     Poll::Error(e) => {
@@ -148,7 +149,7 @@ impl App {
                         self.state = match &self.state {
                             State::PartialImages(v) => {
                                 let mut entries = v.clone();
-                                entries.sort_by_key(|(index, _)| *index);
+                                entries.sort_by(|(a, _), (b, _)| b.cmp(a));
                                 State::Images(entries.into_iter().map(|(_, entry)| entry.clone()).collect())
                             }
                             _ => State::Images(vec![]),
