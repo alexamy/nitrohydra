@@ -29,7 +29,7 @@ struct App {
     thumb_size: f32,
     loader: Option<ImageLoader>,
     selected: Vec<usize>,
-    monitors: Vec<Monitor>,
+    monitors: Result<Vec<Monitor>, String>,
     apply_rx: Option<mpsc::Receiver<ApplyMsg>>,
     apply_status: Option<Result<(), String>>,
     apply_log: String,
@@ -43,7 +43,7 @@ impl Default for App {
             thumb_size: 150.0,
             loader: None,
             selected: Vec::new(),
-            monitors: Vec::new(),
+            monitors: Ok(Vec::new()),
             apply_rx: None,
             apply_status: None,
             apply_log: String::new(),
@@ -114,7 +114,7 @@ impl App {
 
         Self {
             path: path.clone(),
-            monitors: monitors::detect().unwrap_or_default(),
+            monitors: monitors::detect(),
             loader: Some(ImageLoader::start(path.clone(), cc.egui_ctx.clone())),
             state: State::Images(vec![]),
             ..Self::default()
@@ -189,18 +189,20 @@ impl App {
                 ui.spinner();
             }
 
-            if !self.monitors.is_empty() {
-                let text: String = self
-                    .monitors
-                    .iter()
-                    .enumerate()
-                    .map(|(i, m)| format!("#{} {} — {}×{}", i + 1, m.name, m.width, m.height))
-                    .collect::<Vec<_>>()
-                    .join(", ");
-                ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-                    ui.weak(&text);
-                });
-            }
+            let text = match &self.monitors {
+                Ok(monitors) if !monitors.is_empty() => {
+                    monitors.iter()
+                        .enumerate()
+                        .map(|(i, m)| format!("#{} {} — {}×{}", i + 1, m.name, m.width, m.height))
+                        .collect::<Vec<_>>()
+                        .join(", ")
+                }
+                Ok(_) => "No monitors detected".into(),
+                Err(e) => e.clone(),
+            };
+            ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+                ui.weak(&text);
+            });
         });
     }
 
@@ -293,7 +295,8 @@ impl App {
         ui: &mut egui::Ui,
         entries: &[ImageEntry],
     ) -> Option<Vec<(PathBuf, Monitor)>> {
-        if self.selected.len() != 2 || self.monitors.len() < 2 {
+        let Ok(monitors) = &self.monitors else { return None };
+        if self.selected.len() != 2 || monitors.len() < 2 {
             return None;
         }
 
@@ -310,7 +313,7 @@ impl App {
                 assignments = Some(
                     self.selected
                         .iter()
-                        .zip(self.monitors.iter())
+                        .zip(monitors.iter())
                         .map(|(&idx, monitor)| {
                             let path = PathBuf::from(entries[idx].texture.name());
                             (path, monitor.clone())
