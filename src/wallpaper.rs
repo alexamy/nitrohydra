@@ -5,8 +5,8 @@ use image::{DynamicImage, GenericImageView, RgbImage};
 use std::path::{Path, PathBuf};
 use std::process::Command;
 
-/// Compose images to fill each monitor, save the result, and set it as the wallpaper.
-pub fn apply(assignments: &[(PathBuf, Monitor)], log: &dyn Fn(&str)) -> Result<(), String> {
+/// Compose images to fill each monitor into a single canvas.
+pub fn compose(assignments: &[(PathBuf, Monitor)], log: &dyn Fn(&str)) -> Result<DynamicImage, String> {
     let canvas_w: u32 = assignments
         .iter()
         .map(|(_, m)| m.x + m.width)
@@ -38,8 +38,15 @@ pub fn apply(assignments: &[(PathBuf, Monitor)], log: &dyn Fn(&str)) -> Result<(
         );
     }
 
+    Ok(DynamicImage::from(canvas))
+}
+
+/// Compose images to fill each monitor, save the result, and set it as the wallpaper.
+pub fn apply(assignments: &[(PathBuf, Monitor)], log: &dyn Fn(&str)) -> Result<(), String> {
+    let composed = compose(assignments, log)?;
+
     log("Saving wallpaper…");
-    let save_path = save_composed(&canvas)?;
+    let save_path = save_composed(&composed.to_rgb8())?;
 
     log("Setting wallpaper…");
     set_wallpaper(&save_path)

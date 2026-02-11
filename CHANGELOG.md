@@ -3,7 +3,7 @@
 ### Added
 
 - Load images automatically on startup
-- Open directory dialog
+- Added open directory dialog
 - Sort images by modification date
 - Show error if display detection fails
 - Select single image for both displays with shift+click

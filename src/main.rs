@@ -7,6 +7,7 @@ mod selection;
 mod wallpaper;
 
 use std::path::{Path, PathBuf};
+use std::sync::mpsc;
 
 use eframe::egui;
 use apply_job::ApplyJob;
@@ -26,6 +27,11 @@ fn main() -> eframe::Result<()> {
     )
 }
 
+enum SelectionAction {
+    Apply(Vec<(PathBuf, Monitor)>),
+    Preview(Vec<(PathBuf, Monitor)>),
+}
+
 struct App {
     path: String,
     gallery: Gallery,
@@ -33,6 +39,9 @@ struct App {
     selected: Selection,
     monitors: Result<Vec<Monitor>, String>,
     apply: ApplyJob,
+    preview_rx: Option<mpsc::Receiver<Result<egui::ColorImage, String>>>,
+    preview: Option<egui::TextureHandle>,
+    preview_open: bool,
 }
 
 impl Default for App {
@@ -44,6 +53,9 @@ impl Default for App {
             selected: Selection::new(),
             monitors: Ok(Vec::new()),
             apply: ApplyJob::new(),
+            preview_rx: None,
+            preview: None,
+            preview_open: false,
         }
     }
 }
@@ -56,6 +68,7 @@ impl eframe::App for App {
     fn update(&mut self, ctx: &egui::Context, _frame: &mut eframe::Frame) {
         self.gallery.poll(ctx);
         self.apply.poll();
+        self.poll_preview(ctx);
 
         egui::TopBottomPanel::bottom("selection_panel")
             .frame(
@@ -63,6 +76,8 @@ impl eframe::App for App {
                     .inner_margin(egui::Margin::symmetric(8.0, 12.0)),
             )
             .show_animated(ctx, !self.selected.is_empty(), |ui| self.show_selection(ui));
+
+        self.show_preview(ctx);
 
         egui::CentralPanel::default().show(ctx, |ui| {
             self.show_path_input(ui);
@@ -145,8 +160,14 @@ impl App {
             return;
         }
 
-        if let Some(assignments) = self.show_selection_row(ui, entries) {
-            self.apply.start(assignments, ui.ctx());
+        match self.show_selection_row(ui, entries) {
+            Some(SelectionAction::Apply(assignments)) => {
+                self.apply.start(assignments, ui.ctx());
+            }
+            Some(SelectionAction::Preview(assignments)) => {
+                self.start_preview(assignments, ui.ctx());
+            }
+            None => {}
         }
     }
 
@@ -154,15 +175,15 @@ impl App {
         &self,
         ui: &mut egui::Ui,
         entries: &[ImageEntry],
-    ) -> Option<Vec<(PathBuf, Monitor)>> {
-        let mut assignments = None;
+    ) -> Option<SelectionAction> {
+        let mut action = None;
 
         ui.horizontal(|ui| {
             self.show_selection_previews(ui, entries);
-            assignments = self.show_apply_button(ui, entries);
+            action = self.show_apply_button(ui, entries);
         });
 
-        assignments
+        action
     }
 
     fn show_selection_previews(&self, ui: &mut egui::Ui, entries: &[ImageEntry]) {
@@ -183,34 +204,44 @@ impl App {
         &self,
         ui: &mut egui::Ui,
         entries: &[ImageEntry],
-    ) -> Option<Vec<(PathBuf, Monitor)>> {
+    ) -> Option<SelectionAction> {
         let Ok(monitors) = &self.monitors else { return None };
         if self.selected.len() != 2 || monitors.len() < 2 {
             return None;
         }
 
-        let mut assignments = None;
+        let mut action = None;
+        let busy = self.apply.is_running() || self.preview_rx.is_some();
 
         ui.vertical(|ui| {
             ui.add_space(16.0);
-            if self.apply.is_running() {
+            if busy {
                 ui.spinner();
                 let log = self.apply.log();
                 if !log.is_empty() {
                     ui.weak(log);
                 }
-            } else if ui.button("Apply").clicked() {
-                assignments = Some(
-                    self.selected
-                        .items()
-                        .iter()
-                        .zip(monitors.iter())
-                        .map(|(&idx, monitor)| {
-                            let path = PathBuf::from(entries[idx].texture.name());
-                            (path, monitor.clone())
-                        })
-                        .collect(),
-                );
+            } else {
+                ui.horizontal(|ui| {
+                    let assignments = || {
+                        self.selected
+                            .items()
+                            .iter()
+                            .zip(monitors.iter())
+                            .map(|(&idx, monitor)| {
+                                let path = PathBuf::from(entries[idx].texture.name());
+                                (path, monitor.clone())
+                            })
+                            .collect()
+                    };
+
+                    if ui.button("Preview").clicked() {
+                        action = Some(SelectionAction::Preview(assignments()));
+                    }
+                    if ui.button("Apply").clicked() {
+                        action = Some(SelectionAction::Apply(assignments()));
+                    }
+                });
             }
 
             if let Some(status) = self.apply.status() {
@@ -221,7 +252,7 @@ impl App {
             }
         });
 
-        assignments
+        action
     }
 
     fn show_gallery(&mut self, ui: &mut egui::Ui) {
@@ -283,6 +314,54 @@ impl App {
     fn handle_image_click(&mut self, index: usize, shift: bool) {
         self.apply.clear_status();
         self.selected.click(index, shift);
+    }
+
+    fn start_preview(&mut self, assignments: Vec<(PathBuf, Monitor)>, ctx: &egui::Context) {
+        let (tx, rx) = mpsc::channel();
+        let ctx = ctx.clone();
+        std::thread::spawn(move || {
+            let result = wallpaper::compose(&assignments, &|_| {})
+                .map(|img| cache::to_color_image(&img));
+            let _ = tx.send(result);
+            ctx.request_repaint();
+        });
+        self.preview_rx = Some(rx);
+    }
+
+    fn poll_preview(&mut self, ctx: &egui::Context) {
+        let Some(rx) = &self.preview_rx else { return };
+        match rx.try_recv() {
+            Ok(Ok(color_image)) => {
+                self.preview = Some(ctx.load_texture(
+                    "preview",
+                    color_image,
+                    egui::TextureOptions::LINEAR,
+                ));
+                self.preview_open = true;
+                self.preview_rx = None;
+            }
+            Ok(Err(_)) | Err(mpsc::TryRecvError::Disconnected) => {
+                self.preview_rx = None;
+            }
+            Err(mpsc::TryRecvError::Empty) => {}
+        }
+    }
+
+    fn show_preview(&mut self, ctx: &egui::Context) {
+        let Some(texture) = &self.preview else { return };
+        if !self.preview_open {
+            return;
+        }
+
+        let tex_size = texture.size_vec2();
+        let mut open = self.preview_open;
+        egui::Window::new("Preview")
+            .open(&mut open)
+            .default_size(tex_size * 0.5)
+            .show(ctx, |ui| {
+                ui.image(egui::load::SizedTexture::from_handle(texture));
+            });
+        self.preview_open = open;
     }
 }
 
