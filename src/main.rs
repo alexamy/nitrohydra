@@ -59,6 +59,7 @@ enum ApplyMsg {
 struct ImageEntry {
     texture: egui::TextureHandle,
     original_size: [u32; 2],
+    modified: SystemTime,
 }
 
 impl Clone for ImageEntry {
@@ -66,6 +67,7 @@ impl Clone for ImageEntry {
         Self {
             texture: self.texture.clone(),
             original_size: self.original_size,
+            modified: self.modified,
         }
     }
 }
@@ -74,9 +76,7 @@ impl Clone for ImageEntry {
 enum State {
     #[default]
     Empty,
-    Loading,
     Error(String),
-    PartialImages(Vec<(SystemTime, ImageEntry)>),
     Images(Vec<ImageEntry>),
 }
 
@@ -116,7 +116,7 @@ impl App {
             path: path.clone(),
             monitors: monitors::detect().unwrap_or_default(),
             loader: Some(ImageLoader::start(path.clone(), cc.egui_ctx.clone())),
-            state: State::Loading,
+            state: State::Images(vec![]),
             ..Self::default()
         }
     }
@@ -130,10 +130,13 @@ impl App {
                         let entry = ImageEntry {
                             texture,
                             original_size: dimensions,
+                            modified,
                         };
-                        match &mut self.state {
-                            State::PartialImages(v) => v.push((modified, entry)),
-                            _ => self.state = State::PartialImages(vec![(modified, entry)]),
+                        if let State::Images(v) = &mut self.state {
+                            v.push(entry);
+                            v.sort_by(|a, b| b.modified.cmp(&a.modified));
+                        } else {
+                            self.state = State::Images(vec![entry]);
                         }
                     }
                     Poll::Error(e) => {
@@ -143,17 +146,9 @@ impl App {
                     }
                     Poll::Pending => break,
                     Poll::Done => {
-                        if !matches!(&self.state, State::PartialImages(v) if !v.is_empty()) {
-                            self.state = State::PartialImages(vec![]);
+                        if !matches!(&self.state, State::Images(_)) {
+                            self.state = State::Images(vec![]);
                         }
-                        self.state = match &self.state {
-                            State::PartialImages(v) => {
-                                let mut entries = v.clone();
-                                entries.sort_by(|(a, _), (b, _)| b.cmp(a));
-                                State::Images(entries.into_iter().map(|(_, entry)| entry.clone()).collect())
-                            }
-                            _ => State::Images(vec![]),
-                        };
                         self.loader = None;
                         break;
                     }
@@ -169,7 +164,7 @@ impl App {
             ui.add(egui::TextEdit::singleline(&mut self.path).desired_width(f32::INFINITY));
             if clicked {
                 self.loader = Some(ImageLoader::start(self.path.clone(), ui.ctx().clone()));
-                self.state = State::Loading;
+                self.state = State::Images(vec![]);
                 self.selected.clear();
             }
         });
@@ -328,7 +323,7 @@ impl App {
         let loading = self.loader.is_some();
 
         match &self.state {
-            State::Empty | State::Loading | State::PartialImages(_) => {}
+            State::Empty => {}
             State::Error(e) => {
                 ui.colored_label(egui::Color32::RED, e);
             }
@@ -338,7 +333,7 @@ impl App {
             State::Images(entries) if entries.is_empty() => {}
             State::Images(entries) => {
                 let clicked = self.show_image_grid(ui, entries);
-                if let Some(i) = clicked {
+                if let Some(i) = clicked && !loading {
                     self.handle_image_click(i);
                 }
             }
