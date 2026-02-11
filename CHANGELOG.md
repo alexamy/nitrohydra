@@ -3,10 +3,11 @@
 ### Added
 
 - Load images automatically on startup
-- Added open directory dialog
 - Sort images by modification date
-- Show error if display detection fails
 - Select single image for both displays with shift+click
+- Open directory dialog
+- Preview button to see composed wallpaper before applying
+- Show error if display detection fails
 
 ### Changed
 
