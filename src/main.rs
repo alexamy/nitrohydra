@@ -160,14 +160,25 @@ impl App {
     fn show_path_input(&mut self, ui: &mut egui::Ui) {
         ui.label("Directory path:");
         ui.horizontal(|ui| {
-            let clicked = ui.button("Reload").clicked();
-            ui.add(egui::TextEdit::singleline(&mut self.path).desired_width(f32::INFINITY));
-            if clicked {
-                self.loader = Some(ImageLoader::start(self.path.clone(), ui.ctx().clone()));
-                self.state = State::Images(vec![]);
-                self.selected.clear();
+            if ui.button("Open").clicked()
+                && let Some(dir) = rfd::FileDialog::new()
+                    .set_directory(&self.path)
+                    .pick_folder()
+            {
+                self.path = dir.to_string_lossy().into_owned();
+                self.load_images(ui.ctx());
             }
+            if ui.button("Reload").clicked() {
+                self.load_images(ui.ctx());
+            }
+            ui.add(egui::TextEdit::singleline(&mut self.path).desired_width(f32::INFINITY));
         });
+    }
+
+    fn load_images(&mut self, ctx: &egui::Context) {
+        self.loader = Some(ImageLoader::start(self.path.clone(), ctx.clone()));
+        self.state = State::Images(vec![]);
+        self.selected.clear();
     }
 
     fn show_size_slider(&mut self, ui: &mut egui::Ui) {
