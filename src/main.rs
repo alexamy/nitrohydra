@@ -7,7 +7,7 @@ use std::path::{Path, PathBuf};
 use std::sync::mpsc;
 
 use eframe::egui;
-use loader::{ImageLoader, Poll, LoadResult};
+use loader::{ImageLoader, Poll};
 use monitors::Monitor;
 
 fn main() -> eframe::Result<()> {
@@ -124,7 +124,7 @@ impl App {
         if let Some(loader) = &self.loader {
             loop {
                 match loader.poll() {
-                    Poll::Image(LoadResult { index, name, image, dimensions }) => {
+                    Poll::Image(index, name, image, dimensions) => {
                         let texture = ctx.load_texture(name, image, Default::default());
                         let entry = ImageEntry {
                             texture,

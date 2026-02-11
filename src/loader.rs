@@ -9,14 +9,14 @@ const IMAGE_EXTENSIONS: &[&str] = &["jpg", "jpeg", "png"];
 const MAX_TEXTURE_SIZE: u32 = 512;
 
 pub struct LoadResult {
-    pub index: usize,
-    pub name: String,
-    pub image: egui::ColorImage,
-    pub dimensions: [u32; 2],
+    index: usize,
+    name: String,
+    image: egui::ColorImage,
+    dimensions: [u32; 2],
 }
 
 pub enum Poll {
-    Image(LoadResult),
+    Image(usize, String, egui::ColorImage, [u32; 2]),
     Error(String),
     Pending,
     Done,
@@ -48,7 +48,7 @@ impl ImageLoader {
 
     pub fn poll(&self) -> Poll {
         match self.rx.try_recv() {
-            Ok(Ok(LoadResult { index, name, image, dimensions })) => Poll::Image(LoadResult { index, name, image, dimensions }),
+            Ok(Ok(LoadResult { index, name, image, dimensions })) => Poll::Image(index, name, image, dimensions),
             Ok(Err(e)) => Poll::Error(e),
             Err(mpsc::TryRecvError::Empty) => Poll::Pending,
             Err(mpsc::TryRecvError::Disconnected) => Poll::Done,
