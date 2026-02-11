@@ -15,6 +15,13 @@ Browse a folder of images, select one wallpaper per monitor, and apply them inst
 - Per-monitor wallpaper assignment (select #1 for left, #2 for right)
 - Cover-resize: images are scaled and center-cropped to fill each monitor without letterboxing
 
+## Usage
+
+- **Click** an image to select it — first click sets monitor #1, second click sets monitor #2
+- **Click** a new image when both are chosen to replace monitor #2
+- **Click** a selected image when both are chosen to swap their order
+- **Shift+click** an image to select it for both monitors at once
+
 ## Requirements
 
 - `xrandr` — used to detect connected monitors and their resolutions
