@@ -381,7 +381,7 @@ impl App {
 
     fn handle_image_click(&mut self, index: usize) {
         self.apply_status = None;
-        if let Some(_) = self.selected.iter().position(|&idx| idx == index) {
+        if self.selected.contains(&index) {
             if self.selected.len() == 2 {
                 self.selected.swap(0, 1);
             }
