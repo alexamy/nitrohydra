@@ -1,6 +1,7 @@
 mod cache;
 mod loader;
 mod monitors;
+mod selection;
 mod wallpaper;
 
 use std::path::{Path, PathBuf};
@@ -10,6 +11,7 @@ use std::time::SystemTime;
 use eframe::egui;
 use loader::{ImageLoader, Poll};
 use monitors::Monitor;
+use selection::Selection;
 
 fn main() -> eframe::Result<()> {
     let options = eframe::NativeOptions {
@@ -28,7 +30,7 @@ struct App {
     state: State,
     thumb_size: f32,
     loader: Option<ImageLoader>,
-    selected: Vec<usize>,
+    selected: Selection,
     monitors: Result<Vec<Monitor>, String>,
     apply_rx: Option<mpsc::Receiver<ApplyMsg>>,
     apply_status: Option<Result<(), String>>,
@@ -42,7 +44,7 @@ impl Default for App {
             state: State::default(),
             thumb_size: 150.0,
             loader: None,
-            selected: Vec::new(),
+            selected: Selection::new(),
             monitors: Ok(Vec::new()),
             apply_rx: None,
             apply_status: None,
@@ -277,7 +279,7 @@ impl App {
     }
 
     fn show_selection_previews(&self, ui: &mut egui::Ui, entries: &[ImageEntry]) {
-        for (slot, &idx) in self.selected.iter().enumerate() {
+        for (slot, &idx) in self.selected.items().iter().enumerate() {
             let entry = &entries[idx];
             ui.vertical(|ui| {
                 ui.label(format!("#{}", slot + 1));
@@ -312,6 +314,7 @@ impl App {
             } else if ui.button("Apply").clicked() {
                 assignments = Some(
                     self.selected
+                        .items()
                         .iter()
                         .zip(monitors.iter())
                         .map(|(&idx, monitor)| {
@@ -357,7 +360,6 @@ impl App {
     fn show_image_grid(&self, ui: &mut egui::Ui, entries: &[ImageEntry]) -> Option<(usize, bool)> {
         let thumb_size = self.thumb_size;
         let mut clicked = None;
-        let is_duplicated = self.selected.len() == 2 && self.selected[0] == self.selected[1];
 
         egui::ScrollArea::vertical()
             .max_width(f32::INFINITY)
@@ -371,12 +373,8 @@ impl App {
                                 .sense(egui::Sense::click()),
                         );
 
-                        if let Some(pos) = self.selected.iter().position(|&idx| idx == i) {
-                            if is_duplicated {
-                                paint_selection_badge(ui, response.rect, "*");
-                            } else {
-                                paint_selection_badge(ui, response.rect, &(pos + 1).to_string());
-                            }
+                        if let Some(label) = self.selected.badge(i) {
+                            paint_selection_badge(ui, response.rect, label);
                         }
 
                         if response.clicked() {
@@ -396,25 +394,7 @@ impl App {
 
     fn handle_image_click(&mut self, index: usize, shift: bool) {
         self.apply_status = None;
-        if shift {
-            self.selected = vec![index, index];
-            return;
-        }
-        let is_duplicated = self.selected.len() == 2 && self.selected[0] == self.selected[1];
-        if is_duplicated {
-            if self.selected[0] != index {
-                self.selected[1] = index;
-            }
-        } else if self.selected.contains(&index) {
-            if self.selected.len() == 2 {
-                self.selected.swap(0, 1);
-            }
-        } else if self.selected.len() == 2 {
-            self.selected.remove(1);
-            self.selected.push(index);
-        } else {
-            self.selected.push(index);
-        }
+        self.selected.click(index, shift);
     }
 }
 
