@@ -1,16 +1,16 @@
 mod apply_job;
 mod cache;
+mod gallery;
 mod loader;
 mod monitors;
 mod selection;
 mod wallpaper;
 
 use std::path::{Path, PathBuf};
-use std::time::SystemTime;
 
 use eframe::egui;
 use apply_job::ApplyJob;
-use loader::{ImageLoader, Poll};
+use gallery::{Gallery, ImageEntry};
 use monitors::Monitor;
 use selection::Selection;
 
@@ -28,9 +28,8 @@ fn main() -> eframe::Result<()> {
 
 struct App {
     path: String,
-    state: State,
+    gallery: Gallery,
     thumb_size: f32,
-    loader: Option<ImageLoader>,
     selected: Selection,
     monitors: Result<Vec<Monitor>, String>,
     apply: ApplyJob,
@@ -40,38 +39,13 @@ impl Default for App {
     fn default() -> Self {
         Self {
             path: String::new(),
-            state: State::default(),
+            gallery: Gallery::new(),
             thumb_size: 150.0,
-            loader: None,
             selected: Selection::new(),
             monitors: Ok(Vec::new()),
             apply: ApplyJob::new(),
         }
     }
-}
-
-struct ImageEntry {
-    texture: egui::TextureHandle,
-    original_size: [u32; 2],
-    modified: SystemTime,
-}
-
-impl Clone for ImageEntry {
-    fn clone(&self) -> Self {
-        Self {
-            texture: self.texture.clone(),
-            original_size: self.original_size,
-            modified: self.modified,
-        }
-    }
-}
-
-#[derive(Default)]
-enum State {
-    #[default]
-    Empty,
-    Error(String),
-    Images(Vec<ImageEntry>),
 }
 
 impl eframe::App for App {
@@ -80,7 +54,7 @@ impl eframe::App for App {
     }
 
     fn update(&mut self, ctx: &egui::Context, _frame: &mut eframe::Frame) {
-        self.poll_loader(ctx);
+        self.gallery.poll(ctx);
         self.apply.poll();
 
         egui::TopBottomPanel::bottom("selection_panel")
@@ -106,49 +80,13 @@ impl App {
             .and_then(|s| eframe::get_value(s, "path"))
             .unwrap_or_default();
 
-        Self {
+        let mut app = Self {
             path: path.clone(),
             monitors: monitors::detect(),
-            loader: Some(ImageLoader::start(path.clone(), cc.egui_ctx.clone())),
-            state: State::Images(vec![]),
             ..Self::default()
-        }
-    }
-
-    fn poll_loader(&mut self, ctx: &egui::Context) {
-        if let Some(loader) = &self.loader {
-            loop {
-                match loader.poll() {
-                    Poll::Image(modified, name, image, dimensions) => {
-                        let texture = ctx.load_texture(name, image, Default::default());
-                        let entry = ImageEntry {
-                            texture,
-                            original_size: dimensions,
-                            modified,
-                        };
-                        if let State::Images(v) = &mut self.state {
-                            v.push(entry);
-                            v.sort_by(|a, b| b.modified.cmp(&a.modified));
-                        } else {
-                            self.state = State::Images(vec![entry]);
-                        }
-                    }
-                    Poll::Error(e) => {
-                        self.state = State::Error(e);
-                        self.loader = None;
-                        break;
-                    }
-                    Poll::Pending => break,
-                    Poll::Done => {
-                        if !matches!(&self.state, State::Images(_)) {
-                            self.state = State::Images(vec![]);
-                        }
-                        self.loader = None;
-                        break;
-                    }
-                }
-            }
-        }
+        };
+        app.gallery.load(&path, &cc.egui_ctx);
+        app
     }
 
     fn show_path_input(&mut self, ui: &mut egui::Ui) {
@@ -170,8 +108,7 @@ impl App {
     }
 
     fn load_images(&mut self, ctx: &egui::Context) {
-        self.loader = Some(ImageLoader::start(self.path.clone(), ctx.clone()));
-        self.state = State::Images(vec![]);
+        self.gallery.load(&self.path, ctx);
         self.selected.clear();
     }
 
@@ -179,7 +116,7 @@ impl App {
         ui.horizontal(|ui| {
             ui.label("Size");
             ui.add(egui::Slider::new(&mut self.thumb_size, 50.0..=400.0));
-            if self.loader.is_some() {
+            if self.gallery.is_loading() {
                 ui.spinner();
             }
 
@@ -201,7 +138,7 @@ impl App {
     }
 
     fn show_selection(&mut self, ui: &mut egui::Ui) {
-        let State::Images(entries) = &self.state else {
+        let Some(entries) = self.gallery.entries() else {
             return;
         };
         if self.selected.is_empty() {
@@ -288,18 +225,18 @@ impl App {
     }
 
     fn show_gallery(&mut self, ui: &mut egui::Ui) {
-        let loading = self.loader.is_some();
+        let loading = self.gallery.is_loading();
 
-        match &self.state {
-            State::Empty => {}
-            State::Error(e) => {
+        match self.gallery.state() {
+            gallery::State::Empty => {}
+            gallery::State::Error(e) => {
                 ui.colored_label(egui::Color32::RED, e);
             }
-            State::Images(entries) if entries.is_empty() && !loading => {
+            gallery::State::Loaded(entries) if entries.is_empty() && !loading => {
                 ui.label("No images found.");
             }
-            State::Images(entries) if entries.is_empty() => {}
-            State::Images(entries) => {
+            gallery::State::Loaded(entries) if entries.is_empty() => {}
+            gallery::State::Loaded(entries) => {
                 let clicked = self.show_image_grid(ui, entries);
                 if let Some((i, shift)) = clicked && !loading {
                     self.handle_image_click(i, shift);
