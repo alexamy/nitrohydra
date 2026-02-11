@@ -1,4 +1,4 @@
-# 0.2.0 - 2026-02-11
+# 0.2.0
 
 ### Added
 
@@ -13,6 +13,6 @@
 
 - Rewrite selection logic for better UX
 
-# 0.1.0 - 2026-02-10
+# 0.1.0
 
 Initial release.
