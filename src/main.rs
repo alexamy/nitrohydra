@@ -347,16 +347,17 @@ impl App {
             State::Images(entries) if entries.is_empty() => {}
             State::Images(entries) => {
                 let clicked = self.show_image_grid(ui, entries);
-                if let Some(i) = clicked && !loading {
-                    self.handle_image_click(i);
+                if let Some((i, shift)) = clicked && !loading {
+                    self.handle_image_click(i, shift);
                 }
             }
         }
     }
 
-    fn show_image_grid(&self, ui: &mut egui::Ui, entries: &[ImageEntry]) -> Option<usize> {
+    fn show_image_grid(&self, ui: &mut egui::Ui, entries: &[ImageEntry]) -> Option<(usize, bool)> {
         let thumb_size = self.thumb_size;
-        let mut clicked_index = None;
+        let mut clicked = None;
+        let is_duplicated = self.selected.len() == 2 && self.selected[0] == self.selected[1];
 
         egui::ScrollArea::vertical()
             .max_width(f32::INFINITY)
@@ -371,11 +372,16 @@ impl App {
                         );
 
                         if let Some(pos) = self.selected.iter().position(|&idx| idx == i) {
-                            paint_selection_badge(ui, response.rect, pos + 1);
+                            if is_duplicated {
+                                paint_selection_badge(ui, response.rect, "*");
+                            } else {
+                                paint_selection_badge(ui, response.rect, &(pos + 1).to_string());
+                            }
                         }
 
                         if response.clicked() {
-                            clicked_index = Some(i);
+                            let shift = ui.input(|i| i.modifiers.shift);
+                            clicked = Some((i, shift));
                         }
 
                         response.on_hover_ui(|ui| {
@@ -385,12 +391,21 @@ impl App {
                 });
             });
 
-        clicked_index
+        clicked
     }
 
-    fn handle_image_click(&mut self, index: usize) {
+    fn handle_image_click(&mut self, index: usize, shift: bool) {
         self.apply_status = None;
-        if self.selected.contains(&index) {
+        if shift {
+            self.selected = vec![index, index];
+            return;
+        }
+        let is_duplicated = self.selected.len() == 2 && self.selected[0] == self.selected[1];
+        if is_duplicated {
+            if self.selected[0] != index {
+                self.selected[1] = index;
+            }
+        } else if self.selected.contains(&index) {
             if self.selected.len() == 2 {
                 self.selected.swap(0, 1);
             }
@@ -403,7 +418,7 @@ impl App {
     }
 }
 
-fn paint_selection_badge(ui: &egui::Ui, rect: egui::Rect, num: usize) {
+fn paint_selection_badge(ui: &egui::Ui, rect: egui::Rect, label: &str) {
     let center = rect.left_top() + egui::vec2(16.0, 16.0);
     let painter = ui.painter();
     painter.circle_filled(
@@ -414,7 +429,7 @@ fn paint_selection_badge(ui: &egui::Ui, rect: egui::Rect, num: usize) {
     painter.text(
         center,
         egui::Align2::CENTER_CENTER,
-        num.to_string(),
+        label,
         egui::FontId::proportional(20.0),
         egui::Color32::WHITE,
     );
