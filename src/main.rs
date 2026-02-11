@@ -3,16 +3,17 @@ mod cache;
 mod gallery;
 mod loader;
 mod monitors;
+mod preview;
 mod selection;
 mod wallpaper;
 
 use std::path::{Path, PathBuf};
-use std::sync::mpsc;
 
 use eframe::egui;
 use apply_job::ApplyJob;
 use gallery::{Gallery, ImageEntry};
 use monitors::Monitor;
+use preview::PreviewJob;
 use selection::Selection;
 
 fn main() -> eframe::Result<()> {
@@ -39,9 +40,7 @@ struct App {
     selected: Selection,
     monitors: Result<Vec<Monitor>, String>,
     apply: ApplyJob,
-    preview_rx: Option<mpsc::Receiver<Result<egui::ColorImage, String>>>,
-    preview: Option<egui::TextureHandle>,
-    preview_open: bool,
+    preview: PreviewJob,
 }
 
 impl Default for App {
@@ -53,9 +52,7 @@ impl Default for App {
             selected: Selection::new(),
             monitors: Ok(Vec::new()),
             apply: ApplyJob::new(),
-            preview_rx: None,
-            preview: None,
-            preview_open: false,
+            preview: PreviewJob::new(),
         }
     }
 }
@@ -68,7 +65,7 @@ impl eframe::App for App {
     fn update(&mut self, ctx: &egui::Context, _frame: &mut eframe::Frame) {
         self.gallery.poll(ctx);
         self.apply.poll();
-        self.poll_preview(ctx);
+        self.preview.poll(ctx);
 
         egui::TopBottomPanel::bottom("selection_panel")
             .frame(
@@ -77,7 +74,7 @@ impl eframe::App for App {
             )
             .show_animated(ctx, !self.selected.is_empty(), |ui| self.show_selection(ui));
 
-        self.show_preview(ctx);
+        self.preview.show(ctx);
 
         egui::CentralPanel::default().show(ctx, |ui| {
             self.show_path_input(ui);
@@ -165,7 +162,7 @@ impl App {
                 self.apply.start(assignments, ui.ctx());
             }
             Some(SelectionAction::Preview(assignments)) => {
-                self.start_preview(assignments, ui.ctx());
+                self.preview.start(assignments, ui.ctx());
             }
             None => {}
         }
@@ -211,7 +208,7 @@ impl App {
         }
 
         let mut action = None;
-        let busy = self.apply.is_running() || self.preview_rx.is_some();
+        let busy = self.apply.is_running() || self.preview.is_running();
 
         ui.vertical(|ui| {
             ui.add_space(16.0);
@@ -316,53 +313,6 @@ impl App {
         self.selected.click(index, shift);
     }
 
-    fn start_preview(&mut self, assignments: Vec<(PathBuf, Monitor)>, ctx: &egui::Context) {
-        let (tx, rx) = mpsc::channel();
-        let ctx = ctx.clone();
-        std::thread::spawn(move || {
-            let result = wallpaper::compose(&assignments, &|_| {})
-                .map(|img| cache::to_color_image(&img));
-            let _ = tx.send(result);
-            ctx.request_repaint();
-        });
-        self.preview_rx = Some(rx);
-    }
-
-    fn poll_preview(&mut self, ctx: &egui::Context) {
-        let Some(rx) = &self.preview_rx else { return };
-        match rx.try_recv() {
-            Ok(Ok(color_image)) => {
-                self.preview = Some(ctx.load_texture(
-                    "preview",
-                    color_image,
-                    egui::TextureOptions::LINEAR,
-                ));
-                self.preview_open = true;
-                self.preview_rx = None;
-            }
-            Ok(Err(_)) | Err(mpsc::TryRecvError::Disconnected) => {
-                self.preview_rx = None;
-            }
-            Err(mpsc::TryRecvError::Empty) => {}
-        }
-    }
-
-    fn show_preview(&mut self, ctx: &egui::Context) {
-        let Some(texture) = &self.preview else { return };
-        if !self.preview_open {
-            return;
-        }
-
-        let tex_size = texture.size_vec2();
-        let mut open = self.preview_open;
-        egui::Window::new("Preview")
-            .open(&mut open)
-            .default_size(tex_size * 0.5)
-            .show(ctx, |ui| {
-                ui.image(egui::load::SizedTexture::from_handle(texture));
-            });
-        self.preview_open = open;
-    }
 }
 
 fn paint_selection_badge(ui: &egui::Ui, rect: egui::Rect, label: &str) {
