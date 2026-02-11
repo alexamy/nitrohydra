@@ -1,6 +1,6 @@
 # nitrohydra
 
-A multi-monitor wallpaper picker for X11.
+A multi-monitor wallpaper picker for X11 GNOME-based desktop environments.
 
 > [!WARNING]
 > **Tested only on Cinnamon DE. Should work on Gnome and MATE too.**
