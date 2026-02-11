@@ -29,6 +29,14 @@ fn mtime(path: &Path) -> Option<SystemTime> {
     path.metadata().ok()?.modified().ok()
 }
 
+pub fn load_dynamic(source: &Path) -> Option<image::DynamicImage> {
+    let cache = path(source)?;
+    if mtime(&cache)? < mtime(source)? {
+        return None;
+    }
+    image::open(&cache).ok()
+}
+
 pub fn to_color_image(img: &image::DynamicImage) -> egui::ColorImage {
     let rgba = img.to_rgba8();
     let size = [img.width() as usize, img.height() as usize];

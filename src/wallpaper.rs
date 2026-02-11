@@ -5,6 +5,37 @@ use image::{DynamicImage, GenericImageView, RgbImage};
 use std::path::{Path, PathBuf};
 use std::process::Command;
 
+const MAX_PREVIEW_WIDTH: u32 = 1024;
+
+/// Like `compose`, but loads cached thumbnails and scales the canvas down.
+pub fn compose_preview(assignments: &[(PathBuf, Monitor)]) -> Result<DynamicImage, String> {
+    let canvas_w: u32 = assignments.iter().map(|(_, m)| m.x + m.width).max().unwrap_or(0);
+    let canvas_h: u32 = assignments.iter().map(|(_, m)| m.y + m.height).max().unwrap_or(0);
+
+    let scale = f64::from(MAX_PREVIEW_WIDTH).min(f64::from(canvas_w)) / f64::from(canvas_w);
+    let pw = (f64::from(canvas_w) * scale).ceil() as u32;
+    let ph = (f64::from(canvas_h) * scale).ceil() as u32;
+
+    let mut tiles = Vec::new();
+    for (path, monitor) in assignments {
+        let img = crate::cache::load_dynamic(path)
+            .or_else(|| image::open(path).ok())
+            .ok_or_else(|| format!("failed to open {}", path.display()))?;
+        let tw = (f64::from(monitor.width) * scale).ceil() as u32;
+        let th = (f64::from(monitor.height) * scale).ceil() as u32;
+        tiles.push((cover_resize(&img, tw, th), monitor, scale));
+    }
+
+    let mut canvas = RgbImage::new(pw, ph);
+    for (tile, monitor, s) in &tiles {
+        let x = (f64::from(monitor.x) * s).round() as i64;
+        let y = (f64::from(monitor.y) * s).round() as i64;
+        image::imageops::overlay(&mut canvas, tile, x, y);
+    }
+
+    Ok(DynamicImage::from(canvas))
+}
+
 /// Compose images to fill each monitor into a single canvas.
 pub fn compose(assignments: &[(PathBuf, Monitor)], log: &dyn Fn(&str)) -> Result<DynamicImage, String> {
     let canvas_w: u32 = assignments

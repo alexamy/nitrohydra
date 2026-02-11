@@ -9,8 +9,8 @@ mod wallpaper;
 
 use std::path::{Path, PathBuf};
 
-use eframe::egui;
 use apply_job::ApplyJob;
+use eframe::egui;
 use gallery::{Gallery, ImageEntry};
 use monitors::Monitor;
 use preview::PreviewJob;
@@ -92,6 +92,10 @@ impl App {
             .and_then(|s| eframe::get_value(s, "path"))
             .unwrap_or_default();
 
+        let mut style = (*cc.egui_ctx.style()).clone();
+        style.spacing.button_padding += egui::vec2(3.0, 3.0);
+        cc.egui_ctx.set_style(style);
+
         let mut app = Self {
             path: path.clone(),
             monitors: monitors::detect(),
@@ -102,7 +106,9 @@ impl App {
     }
 
     fn show_path_input(&mut self, ui: &mut egui::Ui) {
+        ui.add_space(3.0);
         ui.label("Directory path:");
+        ui.add_space(3.0);
         ui.horizontal(|ui| {
             if ui.button("Open").clicked()
                 && let Some(dir) = rfd::FileDialog::new()
@@ -115,8 +121,13 @@ impl App {
             if ui.button("Reload").clicked() {
                 self.load_images(ui.ctx());
             }
-            ui.add(egui::TextEdit::singleline(&mut self.path).desired_width(f32::INFINITY));
+            ui.add(
+                egui::TextEdit::singleline(&mut self.path)
+                    .desired_width(f32::INFINITY)
+                    .margin(egui::Margin::symmetric(7.0, 5.0)),
+            );
         });
+        ui.add_space(3.0);
     }
 
     fn load_images(&mut self, ctx: &egui::Context) {
@@ -125,6 +136,7 @@ impl App {
     }
 
     fn show_size_slider(&mut self, ui: &mut egui::Ui) {
+        ui.add_space(3.0);
         ui.horizontal(|ui| {
             ui.label("Size");
             ui.add(egui::Slider::new(&mut self.thumb_size, 50.0..=400.0));
@@ -133,13 +145,12 @@ impl App {
             }
 
             let text = match &self.monitors {
-                Ok(monitors) if !monitors.is_empty() => {
-                    monitors.iter()
-                        .enumerate()
-                        .map(|(i, m)| format!("#{} {} — {}×{}", i + 1, m.name, m.width, m.height))
-                        .collect::<Vec<_>>()
-                        .join(", ")
-                }
+                Ok(monitors) if !monitors.is_empty() => monitors
+                    .iter()
+                    .enumerate()
+                    .map(|(i, m)| format!("#{} {} — {}×{}", i + 1, m.name, m.width, m.height))
+                    .collect::<Vec<_>>()
+                    .join(", "),
                 Ok(_) => "No monitors detected".into(),
                 Err(e) => e.clone(),
             };
@@ -147,6 +158,7 @@ impl App {
                 ui.weak(&text);
             });
         });
+        ui.add_space(3.0);
     }
 
     fn show_selection(&mut self, ui: &mut egui::Ui) {
@@ -187,6 +199,7 @@ impl App {
             }
         });
 
+        ui.add_space(3.0);
         self.show_action_row(ui, entries)
     }
 
@@ -196,8 +209,7 @@ impl App {
         entries: &[ImageEntry],
     ) -> Option<SelectionAction> {
         let mut action = None;
-        let can_act = matches!(&self.monitors, Ok(m) if m.len() >= 2)
-            && self.selected.len() == 2;
+        let can_act = matches!(&self.monitors, Ok(m) if m.len() >= 2) && self.selected.len() == 2;
         let busy = self.apply.is_running() || self.preview.is_running();
 
         ui.horizontal(|ui| {
@@ -221,6 +233,8 @@ impl App {
                         .collect()
                 };
 
+                ui.add_space(3.0);
+
                 if ui.button("Preview").clicked() {
                     action = Some(SelectionAction::Preview(assignments()));
                 }
@@ -231,8 +245,12 @@ impl App {
 
             if let Some(status) = self.apply.status() {
                 match status {
-                    Ok(()) => { ui.label("Applied!"); }
-                    Err(e) => { ui.colored_label(egui::Color32::RED, e); }
+                    Ok(()) => {
+                        ui.label("Applied!");
+                    }
+                    Err(e) => {
+                        ui.colored_label(egui::Color32::RED, e);
+                    }
                 }
             }
 
@@ -257,7 +275,9 @@ impl App {
             gallery::State::Loaded(entries) if entries.is_empty() => {}
             gallery::State::Loaded(entries) => {
                 let clicked = self.show_image_grid(ui, entries);
-                if let Some((i, shift)) = clicked && !loading {
+                if let Some((i, shift)) = clicked
+                    && !loading
+                {
                     self.handle_image_click(i, shift);
                 }
             }
@@ -303,7 +323,6 @@ impl App {
         self.apply.clear_status();
         self.selected.click(index, shift);
     }
-
 }
 
 fn paint_selection_badge(ui: &egui::Ui, rect: egui::Rect, label: &str) {

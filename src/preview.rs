@@ -25,7 +25,7 @@ impl PreviewJob {
         let (tx, rx) = mpsc::channel();
         let ctx = ctx.clone();
         std::thread::spawn(move || {
-            let result = wallpaper::compose(&assignments, &|_| {})
+            let result = wallpaper::compose_preview(&assignments)
                 .map(|img| cache::to_color_image(&img));
             let _ = tx.send(result);
             ctx.request_repaint();
