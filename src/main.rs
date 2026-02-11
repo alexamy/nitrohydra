@@ -173,72 +173,60 @@ impl App {
         ui: &mut egui::Ui,
         entries: &[ImageEntry],
     ) -> Option<SelectionAction> {
-        let mut action = None;
-
         ui.horizontal(|ui| {
-            self.show_selection_previews(ui, entries);
-            action = self.show_apply_button(ui, entries);
+            for (slot, &idx) in self.selected.items().iter().enumerate() {
+                let entry = &entries[idx];
+                ui.vertical(|ui| {
+                    ui.label(format!("#{}", slot + 1));
+                    ui.add(
+                        egui::Image::new(&entry.texture)
+                            .maintain_aspect_ratio(true)
+                            .fit_to_exact_size(egui::vec2(120.0, 120.0)),
+                    );
+                });
+            }
         });
 
-        action
+        self.show_action_row(ui, entries)
     }
 
-    fn show_selection_previews(&self, ui: &mut egui::Ui, entries: &[ImageEntry]) {
-        for (slot, &idx) in self.selected.items().iter().enumerate() {
-            let entry = &entries[idx];
-            ui.vertical(|ui| {
-                ui.label(format!("#{}", slot + 1));
-                ui.add(
-                    egui::Image::new(&entry.texture)
-                        .maintain_aspect_ratio(true)
-                        .fit_to_exact_size(egui::vec2(120.0, 120.0)),
-                );
-            });
-        }
-    }
-
-    fn show_apply_button(
+    fn show_action_row(
         &self,
         ui: &mut egui::Ui,
         entries: &[ImageEntry],
     ) -> Option<SelectionAction> {
-        let Ok(monitors) = &self.monitors else { return None };
-        if self.selected.len() != 2 || monitors.len() < 2 {
-            return None;
-        }
-
         let mut action = None;
+        let can_act = matches!(&self.monitors, Ok(m) if m.len() >= 2)
+            && self.selected.len() == 2;
         let busy = self.apply.is_running() || self.preview.is_running();
 
-        ui.vertical(|ui| {
-            ui.add_space(16.0);
+        ui.horizontal(|ui| {
             if busy {
                 ui.spinner();
                 let log = self.apply.log();
                 if !log.is_empty() {
                     ui.weak(log);
                 }
-            } else {
-                ui.horizontal(|ui| {
-                    let assignments = || {
-                        self.selected
-                            .items()
-                            .iter()
-                            .zip(monitors.iter())
-                            .map(|(&idx, monitor)| {
-                                let path = PathBuf::from(entries[idx].texture.name());
-                                (path, monitor.clone())
-                            })
-                            .collect()
-                    };
+            } else if can_act {
+                let monitors = self.monitors.as_ref().unwrap();
+                let assignments = || {
+                    self.selected
+                        .items()
+                        .iter()
+                        .zip(monitors.iter())
+                        .map(|(&idx, monitor)| {
+                            let path = PathBuf::from(entries[idx].texture.name());
+                            (path, monitor.clone())
+                        })
+                        .collect()
+                };
 
-                    if ui.button("Preview").clicked() {
-                        action = Some(SelectionAction::Preview(assignments()));
-                    }
-                    if ui.button("Apply").clicked() {
-                        action = Some(SelectionAction::Apply(assignments()));
-                    }
-                });
+                if ui.button("Preview").clicked() {
+                    action = Some(SelectionAction::Preview(assignments()));
+                }
+                if ui.button("Apply").clicked() {
+                    action = Some(SelectionAction::Apply(assignments()));
+                }
             }
 
             if let Some(status) = self.apply.status() {
@@ -247,6 +235,9 @@ impl App {
                     Err(e) => { ui.colored_label(egui::Color32::RED, e); }
                 }
             }
+
+            // Reserve consistent height so the panel doesn't jump.
+            ui.allocate_space(egui::vec2(0.0, ui.spacing().interact_size.y));
         });
 
         action
