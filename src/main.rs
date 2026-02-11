@@ -1,3 +1,4 @@
+mod apply_job;
 mod cache;
 mod loader;
 mod monitors;
@@ -5,10 +6,10 @@ mod selection;
 mod wallpaper;
 
 use std::path::{Path, PathBuf};
-use std::sync::mpsc;
 use std::time::SystemTime;
 
 use eframe::egui;
+use apply_job::ApplyJob;
 use loader::{ImageLoader, Poll};
 use monitors::Monitor;
 use selection::Selection;
@@ -32,9 +33,7 @@ struct App {
     loader: Option<ImageLoader>,
     selected: Selection,
     monitors: Result<Vec<Monitor>, String>,
-    apply_rx: Option<mpsc::Receiver<ApplyMsg>>,
-    apply_status: Option<Result<(), String>>,
-    apply_log: String,
+    apply: ApplyJob,
 }
 
 impl Default for App {
@@ -46,16 +45,9 @@ impl Default for App {
             loader: None,
             selected: Selection::new(),
             monitors: Ok(Vec::new()),
-            apply_rx: None,
-            apply_status: None,
-            apply_log: String::new(),
+            apply: ApplyJob::new(),
         }
     }
-}
-
-enum ApplyMsg {
-    Status(String),
-    Done(Result<(), String>),
 }
 
 struct ImageEntry {
@@ -89,7 +81,7 @@ impl eframe::App for App {
 
     fn update(&mut self, ctx: &egui::Context, _frame: &mut eframe::Frame) {
         self.poll_loader(ctx);
-        self.poll_apply();
+        self.apply.poll();
 
         egui::TopBottomPanel::bottom("selection_panel")
             .frame(
@@ -208,47 +200,6 @@ impl App {
         });
     }
 
-    fn poll_apply(&mut self) {
-        let Some(rx) = &self.apply_rx else { return };
-        loop {
-            match rx.try_recv() {
-                Ok(ApplyMsg::Status(msg)) => self.apply_log = msg,
-                Ok(ApplyMsg::Done(result)) => {
-                    self.apply_status = Some(result);
-                    self.apply_log.clear();
-                    self.apply_rx = None;
-                    break;
-                }
-                Err(mpsc::TryRecvError::Disconnected) => {
-                    self.apply_status = Some(Err("apply thread crashed".into()));
-                    self.apply_log.clear();
-                    self.apply_rx = None;
-                    break;
-                }
-                Err(mpsc::TryRecvError::Empty) => break,
-            }
-        }
-    }
-
-    fn start_apply(&mut self, assignments: Vec<(PathBuf, Monitor)>, ctx: &egui::Context) {
-        let (tx, rx) = mpsc::channel();
-        let ctx = ctx.clone();
-        std::thread::spawn(move || {
-            let log_tx = tx.clone();
-            let log_ctx = ctx.clone();
-            let log = move |msg: &str| {
-                let _ = log_tx.send(ApplyMsg::Status(msg.to_string()));
-                log_ctx.request_repaint();
-            };
-            let result = wallpaper::apply(&assignments, &log);
-            let _ = tx.send(ApplyMsg::Done(result));
-            ctx.request_repaint();
-        });
-
-        self.apply_rx = Some(rx);
-        self.apply_status = None;
-    }
-
     fn show_selection(&mut self, ui: &mut egui::Ui) {
         let State::Images(entries) = &self.state else {
             return;
@@ -258,8 +209,7 @@ impl App {
         }
 
         if let Some(assignments) = self.show_selection_row(ui, entries) {
-            let ctx = ui.ctx().clone();
-            self.start_apply(assignments, &ctx);
+            self.apply.start(assignments, ui.ctx());
         }
     }
 
@@ -306,10 +256,11 @@ impl App {
 
         ui.vertical(|ui| {
             ui.add_space(16.0);
-            if self.apply_rx.is_some() {
+            if self.apply.is_running() {
                 ui.spinner();
-                if !self.apply_log.is_empty() {
-                    ui.weak(&self.apply_log);
+                let log = self.apply.log();
+                if !log.is_empty() {
+                    ui.weak(log);
                 }
             } else if ui.button("Apply").clicked() {
                 assignments = Some(
@@ -325,7 +276,7 @@ impl App {
                 );
             }
 
-            if let Some(status) = &self.apply_status {
+            if let Some(status) = self.apply.status() {
                 match status {
                     Ok(()) => { ui.label("Applied!"); }
                     Err(e) => { ui.colored_label(egui::Color32::RED, e); }
@@ -393,7 +344,7 @@ impl App {
     }
 
     fn handle_image_click(&mut self, index: usize, shift: bool) {
-        self.apply_status = None;
+        self.apply.clear_status();
         self.selected.click(index, shift);
     }
 }
