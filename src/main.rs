@@ -121,15 +121,17 @@ impl eframe::App for App {
         self.preview.poll(ctx);
         self.auto_preview(ctx);
 
-        egui::TopBottomPanel::bottom("selection_panel")
-            .frame(
-                egui::Frame::side_top_panel(&ctx.style())
-                    .inner_margin(egui::Margin::symmetric(8.0, 12.0)),
-            )
-            .min_height(160.0)
-            .show(ctx, |ui| {
-                self.show_selection(ui);
-            });
+        if !self.selected.is_empty() {
+            egui::TopBottomPanel::bottom("selection_panel")
+                .frame(
+                    egui::Frame::side_top_panel(&ctx.style())
+                        .inner_margin(egui::Margin::symmetric(8.0, 12.0)),
+                )
+                .min_height(160.0)
+                .show(ctx, |ui| {
+                    self.show_selection(ui);
+                });
+        }
 
         egui::CentralPanel::default().show(ctx, |ui| {
             self.show_path_input(ui);
@@ -284,7 +286,9 @@ impl App {
             }
 
             if self.preview.has_texture() || self.preview.is_running() {
+                ui.add_space(8.0);
                 ui.separator();
+                ui.add_space(8.0);
                 ui.vertical(|ui| {
                     ui.label("Wallpaper");
                     if self.preview.is_running() {
@@ -293,7 +297,6 @@ impl App {
                         self.preview.show_image(ui);
                     }
 
-                    ui.add_space(3.0);
                     if busy {
                         ui.horizontal(|ui| {
                             ui.spinner();
