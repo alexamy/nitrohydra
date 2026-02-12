@@ -61,10 +61,11 @@ impl PreviewJob {
 
     pub fn show_image(&self, ui: &mut egui::Ui) {
         let Some(texture) = &self.texture else { return };
+        let available = ui.available_size();
         ui.add(
             egui::Image::new(egui::load::SizedTexture::from_handle(texture))
                 .maintain_aspect_ratio(true)
-                .fit_to_exact_size(egui::vec2(300.0, 300.0)),
+                .fit_to_exact_size(available),
         );
     }
 }

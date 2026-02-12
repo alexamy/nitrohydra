@@ -127,6 +127,8 @@ impl eframe::App for App {
                     egui::Frame::side_top_panel(&ctx.style())
                         .inner_margin(egui::Margin::symmetric(8.0, 12.0)),
                 )
+                .resizable(true)
+                .default_height(200.0)
                 .show(ctx, |ui| {
                     self.show_selection(ui);
                 });
