@@ -14,6 +14,8 @@ pub struct PreviewJob {
 }
 
 impl PreviewJob {
+    const IMAGE_HEIGHT: f32 = 120.0;
+
     pub fn new() -> Self {
         Self {
             rx: None,
@@ -72,11 +74,13 @@ impl PreviewJob {
 
     pub fn show_image(&self, ui: &mut egui::Ui) {
         let Some(texture) = &self.texture else { return };
-        let available = ui.available_size();
+        let tex_size = texture.size_vec2();
+        let aspect = tex_size.x / tex_size.y;
+        let h = Self::IMAGE_HEIGHT;
+        let w = h * aspect;
         ui.add(
             egui::Image::new(egui::load::SizedTexture::from_handle(texture))
-                .maintain_aspect_ratio(true)
-                .fit_to_exact_size(available),
+                .fit_to_exact_size(egui::vec2(w, h)),
         );
     }
 }

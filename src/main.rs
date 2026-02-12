@@ -58,6 +58,7 @@ impl eframe::App for App {
                         .inner_margin(egui::Margin::symmetric(8.0, 12.0)),
                 )
                 .resizable(true)
+                .min_height(170.0)
                 .default_height(200.0)
                 .show(ctx, |ui| {
                     self.show_selection(ui);
