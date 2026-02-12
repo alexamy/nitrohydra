@@ -16,16 +16,72 @@ use monitors::Monitor;
 use preview::PreviewJob;
 use selection::Selection;
 
-fn main() -> eframe::Result<()> {
+fn main() {
+    let args: Vec<String> = std::env::args().collect();
+    match args.len() {
+        1 => run_gui(),
+        3 => run_cli(&args[1], &args[2]),
+        _ => {
+            show_help();
+            let is_help = args.get(1).is_some_and(|a| a == "--help" || a == "-h");
+            std::process::exit(if is_help { 0 } else { 1 });
+        }
+    }
+}
+
+fn show_help() {
+    let bin = std::env::args()
+        .next()
+        .unwrap_or_else(|| "nitrohydra".into());
+    eprintln!("nitrohydra — multi-monitor wallpaper composer");
+    eprintln!();
+    eprintln!("Usage:");
+    eprintln!("  {bin}                     Start the GUI");
+    eprintln!("  {bin} <image1> <image2>   Join images and set as wallpaper");
+    eprintln!();
+    eprintln!("Images are assigned to monitors left-to-right.");
+}
+
+fn run_gui() {
     let options = eframe::NativeOptions {
         viewport: egui::ViewportBuilder::default().with_inner_size([1280.0, 720.0]),
         ..Default::default()
     };
-    eframe::run_native(
+    if let Err(e) = eframe::run_native(
         "nitrohydra",
         options,
         Box::new(|cc| Ok(Box::new(App::new(cc)))),
-    )
+    ) {
+        eprintln!("error: {e}");
+        std::process::exit(1);
+    }
+}
+
+fn run_cli(left: &str, right: &str) {
+    let monitors = match monitors::detect() {
+        Ok(m) => m,
+        Err(e) => {
+            eprintln!("error: {e}");
+            std::process::exit(1);
+        }
+    };
+
+    if monitors.len() < 2 {
+        eprintln!("error: need at least 2 monitors, found {}", monitors.len());
+        std::process::exit(1);
+    }
+
+    let assignments: Vec<(PathBuf, Monitor)> = vec![
+        (PathBuf::from(left), monitors[0].clone()),
+        (PathBuf::from(right), monitors[1].clone()),
+    ];
+
+    if let Err(e) = wallpaper::apply(&assignments, &|msg| eprintln!("{msg}")) {
+        eprintln!("error: {e}");
+        std::process::exit(1);
+    }
+
+    eprintln!("Wallpaper applied!");
 }
 
 enum SelectionAction {
