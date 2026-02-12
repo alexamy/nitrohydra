@@ -98,12 +98,13 @@ impl App {
                 ui.separator();
                 ui.add_space(8.0);
                 ui.vertical(|ui| {
-                    ui.label("Wallpaper");
-                    if self.preview.is_running() {
-                        ui.spinner();
-                    } else {
-                        self.preview.show_image(ui);
-                    }
+                    ui.horizontal(|ui| {
+                        ui.label("Wallpaper");
+                        if self.preview.is_running() {
+                            ui.spinner();
+                        }
+                    });
+                    self.preview.show_image(ui);
                 });
 
                 ui.vertical(|ui| {
