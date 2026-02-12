@@ -84,11 +84,6 @@ fn run_cli(left: &str, right: &str) {
     eprintln!("Wallpaper applied!");
 }
 
-enum SelectionAction {
-    Apply(Vec<(PathBuf, Monitor)>),
-    Preview(Vec<(PathBuf, Monitor)>),
-}
-
 struct App {
     path: String,
     gallery: Gallery,
@@ -97,6 +92,7 @@ struct App {
     monitors: Result<Vec<Monitor>, String>,
     apply: ApplyJob,
     preview: PreviewJob,
+    preview_items: Option<[usize; 2]>,
 }
 
 impl Default for App {
@@ -109,6 +105,7 @@ impl Default for App {
             monitors: Ok(Vec::new()),
             apply: ApplyJob::new(),
             preview: PreviewJob::new(),
+            preview_items: None,
         }
     }
 }
@@ -122,15 +119,15 @@ impl eframe::App for App {
         self.gallery.poll(ctx);
         self.apply.poll();
         self.preview.poll(ctx);
+        self.auto_preview(ctx);
 
         egui::TopBottomPanel::bottom("selection_panel")
             .frame(
                 egui::Frame::side_top_panel(&ctx.style())
                     .inner_margin(egui::Margin::symmetric(8.0, 12.0)),
             )
+            .min_height(300.0)
             .show_animated(ctx, !self.selected.is_empty(), |ui| self.show_selection(ui));
-
-        self.preview.show(ctx);
 
         egui::CentralPanel::default().show(ctx, |ui| {
             self.show_path_input(ui);
@@ -191,6 +188,38 @@ impl App {
         self.selected.clear();
     }
 
+    fn auto_preview(&mut self, ctx: &egui::Context) {
+        if self.selected.len() != 2 || !matches!(&self.monitors, Ok(m) if m.len() >= 2) {
+            if self.preview_items.is_some() {
+                self.preview.clear();
+                self.preview_items = None;
+            }
+            return;
+        }
+
+        let items = [self.selected.items()[0], self.selected.items()[1]];
+        if self.preview_items == Some(items) || self.preview.is_running() {
+            return;
+        }
+
+        let Some(entries) = self.gallery.entries() else {
+            return;
+        };
+        let monitors = self.monitors.as_ref().unwrap();
+        let assignments: Vec<(PathBuf, Monitor)> = self
+            .selected
+            .items()
+            .iter()
+            .zip(monitors.iter())
+            .map(|(&idx, monitor)| {
+                let path = PathBuf::from(entries[idx].texture.name());
+                (path, monitor.clone())
+            })
+            .collect();
+        self.preview.start(assignments, ctx);
+        self.preview_items = Some(items);
+    }
+
     fn show_size_slider(&mut self, ui: &mut egui::Ui) {
         ui.add_space(3.0);
         ui.horizontal(|ui| {
@@ -225,14 +254,8 @@ impl App {
             return;
         }
 
-        match self.show_selection_row(ui, entries) {
-            Some(SelectionAction::Apply(assignments)) => {
-                self.apply.start(assignments, ui.ctx());
-            }
-            Some(SelectionAction::Preview(assignments)) => {
-                self.preview.start(assignments, ui.ctx());
-            }
-            None => {}
+        if let Some(assignments) = self.show_selection_row(ui, entries) {
+            self.apply.start(assignments, ui.ctx());
         }
     }
 
@@ -240,7 +263,7 @@ impl App {
         &self,
         ui: &mut egui::Ui,
         entries: &[ImageEntry],
-    ) -> Option<SelectionAction> {
+    ) -> Option<Vec<(PathBuf, Monitor)>> {
         ui.horizontal(|ui| {
             for (slot, &idx) in self.selected.items().iter().enumerate() {
                 let entry = &entries[idx];
@@ -253,6 +276,18 @@ impl App {
                     );
                 });
             }
+
+            if self.preview.has_texture() || self.preview.is_running() {
+                ui.separator();
+                if self.preview.is_running() {
+                    ui.vertical(|ui| {
+                        ui.label("result");
+                        ui.spinner();
+                    });
+                } else {
+                    self.preview.show_inline(ui);
+                }
+            }
         });
 
         ui.add_space(3.0);
@@ -263,10 +298,10 @@ impl App {
         &self,
         ui: &mut egui::Ui,
         entries: &[ImageEntry],
-    ) -> Option<SelectionAction> {
+    ) -> Option<Vec<(PathBuf, Monitor)>> {
         let mut action = None;
         let can_act = matches!(&self.monitors, Ok(m) if m.len() >= 2) && self.selected.len() == 2;
-        let busy = self.apply.is_running() || self.preview.is_running();
+        let busy = self.apply.is_running();
 
         ui.horizontal(|ui| {
             if busy {
@@ -290,12 +325,8 @@ impl App {
                 };
 
                 ui.add_space(3.0);
-
-                if ui.button("Preview").clicked() {
-                    action = Some(SelectionAction::Preview(assignments()));
-                }
                 if ui.button("Apply").clicked() {
-                    action = Some(SelectionAction::Apply(assignments()));
+                    action = Some(assignments());
                 }
             }
 

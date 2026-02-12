@@ -9,7 +9,6 @@ use crate::{cache, wallpaper};
 pub struct PreviewJob {
     rx: Option<mpsc::Receiver<Result<egui::ColorImage, String>>>,
     texture: Option<egui::TextureHandle>,
-    open: bool,
 }
 
 impl PreviewJob {
@@ -17,7 +16,6 @@ impl PreviewJob {
         Self {
             rx: None,
             texture: None,
-            open: false,
         }
     }
 
@@ -25,8 +23,8 @@ impl PreviewJob {
         let (tx, rx) = mpsc::channel();
         let ctx = ctx.clone();
         std::thread::spawn(move || {
-            let result = wallpaper::compose_preview(&assignments)
-                .map(|img| cache::to_color_image(&img));
+            let result =
+                wallpaper::compose_preview(&assignments).map(|img| cache::to_color_image(&img));
             let _ = tx.send(result);
             ctx.request_repaint();
         });
@@ -37,12 +35,8 @@ impl PreviewJob {
         let Some(rx) = &self.rx else { return };
         match rx.try_recv() {
             Ok(Ok(color_image)) => {
-                self.texture = Some(ctx.load_texture(
-                    "preview",
-                    color_image,
-                    egui::TextureOptions::LINEAR,
-                ));
-                self.open = true;
+                self.texture =
+                    Some(ctx.load_texture("preview", color_image, egui::TextureOptions::LINEAR));
                 self.rx = None;
             }
             Ok(Err(_)) | Err(mpsc::TryRecvError::Disconnected) => {
@@ -56,20 +50,24 @@ impl PreviewJob {
         self.rx.is_some()
     }
 
-    pub fn show(&mut self, ctx: &egui::Context) {
-        let Some(texture) = &self.texture else { return };
-        if !self.open {
-            return;
-        }
+    pub fn has_texture(&self) -> bool {
+        self.texture.is_some()
+    }
 
-        let tex_size = texture.size_vec2();
-        let mut open = self.open;
-        egui::Window::new("Preview")
-            .open(&mut open)
-            .default_size(tex_size * 0.5)
-            .show(ctx, |ui| {
-                ui.image(egui::load::SizedTexture::from_handle(texture));
-            });
-        self.open = open;
+    pub fn clear(&mut self) {
+        self.texture = None;
+        self.rx = None;
+    }
+
+    pub fn show_inline(&self, ui: &mut egui::Ui) {
+        let Some(texture) = &self.texture else { return };
+        ui.vertical(|ui| {
+            ui.label("Wallpaper");
+            ui.add(
+                egui::Image::new(egui::load::SizedTexture::from_handle(texture))
+                    .maintain_aspect_ratio(true)
+                    .fit_to_exact_size(egui::vec2(300.0, 300.0)),
+            );
+        });
     }
 }
