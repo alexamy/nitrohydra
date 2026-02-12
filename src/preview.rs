@@ -1,5 +1,6 @@
 use std::path::PathBuf;
 use std::sync::mpsc;
+use std::time::Instant;
 
 use eframe::egui;
 
@@ -9,6 +10,7 @@ use crate::{cache, wallpaper};
 pub struct PreviewJob {
     rx: Option<mpsc::Receiver<Result<egui::ColorImage, String>>>,
     texture: Option<egui::TextureHandle>,
+    started_at: Option<Instant>,
 }
 
 impl PreviewJob {
@@ -16,6 +18,7 @@ impl PreviewJob {
         Self {
             rx: None,
             texture: None,
+            started_at: None,
         }
     }
 
@@ -29,6 +32,7 @@ impl PreviewJob {
             ctx.request_repaint();
         });
         self.rx = Some(rx);
+        self.started_at = Some(Instant::now());
     }
 
     pub fn poll(&mut self, ctx: &egui::Context) {
@@ -38,9 +42,11 @@ impl PreviewJob {
                 self.texture =
                     Some(ctx.load_texture("preview", color_image, egui::TextureOptions::LINEAR));
                 self.rx = None;
+                self.started_at = None;
             }
             Ok(Err(_)) | Err(mpsc::TryRecvError::Disconnected) => {
                 self.rx = None;
+                self.started_at = None;
             }
             Err(mpsc::TryRecvError::Empty) => {}
         }
@@ -48,6 +54,11 @@ impl PreviewJob {
 
     pub fn is_running(&self) -> bool {
         self.rx.is_some()
+    }
+
+    pub fn is_running_slow(&self) -> bool {
+        self.started_at
+            .is_some_and(|t| t.elapsed() > std::time::Duration::from_millis(500))
     }
 
     pub fn has_texture(&self) -> bool {

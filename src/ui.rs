@@ -100,7 +100,7 @@ impl App {
                 ui.vertical(|ui| {
                     ui.horizontal(|ui| {
                         ui.label("Wallpaper");
-                        if self.preview.is_running() {
+                        if self.preview.is_running_slow() {
                             ui.spinner();
                         }
                     });
