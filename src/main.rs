@@ -127,7 +127,6 @@ impl eframe::App for App {
                     egui::Frame::side_top_panel(&ctx.style())
                         .inner_margin(egui::Margin::symmetric(8.0, 12.0)),
                 )
-                .min_height(160.0)
                 .show(ctx, |ui| {
                     self.show_selection(ui);
                 });
@@ -296,15 +295,20 @@ impl App {
                     } else {
                         self.preview.show_image(ui);
                     }
+                });
+
+                ui.vertical(|ui| {
+                    // Align with the preview image (skip past the "Wallpaper" label).
+                    let label_height =
+                        ui.text_style_height(&egui::TextStyle::Body) + ui.spacing().item_spacing.y;
+                    ui.add_space(label_height);
 
                     if busy {
-                        ui.horizontal(|ui| {
-                            ui.spinner();
-                            let log = self.apply.log();
-                            if !log.is_empty() {
-                                ui.weak(log);
-                            }
-                        });
+                        ui.spinner();
+                        let log = self.apply.log();
+                        if !log.is_empty() {
+                            ui.weak(log);
+                        }
                     } else if can_act {
                         let monitors = self.monitors.as_ref().unwrap();
                         let assignments = || {
