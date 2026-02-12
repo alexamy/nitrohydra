@@ -51,17 +51,15 @@ impl eframe::App for App {
         self.preview.poll(ctx);
         self.auto_preview(ctx);
 
-        if !self.selected.is_empty() {
-            egui::TopBottomPanel::bottom("selection_panel")
-                .frame(
-                    egui::Frame::side_top_panel(&ctx.style())
-                        .inner_margin(egui::Margin::symmetric(8.0, 12.0)),
-                )
-                .resizable(false)
-                .show(ctx, |ui| {
-                    self.show_selection(ui);
-                });
-        }
+        egui::TopBottomPanel::bottom("selection_panel")
+            .frame(
+                egui::Frame::side_top_panel(&ctx.style())
+                    .inner_margin(egui::Margin::symmetric(8.0, 12.0)),
+            )
+            .resizable(false)
+            .show_animated(ctx, !self.selected.is_empty(), |ui| {
+                self.show_selection(ui);
+            });
 
         egui::CentralPanel::default().show(ctx, |ui| {
             self.show_path_input(ui);
