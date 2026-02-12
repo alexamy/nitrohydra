@@ -126,8 +126,10 @@ impl eframe::App for App {
                 egui::Frame::side_top_panel(&ctx.style())
                     .inner_margin(egui::Margin::symmetric(8.0, 12.0)),
             )
-            .min_height(300.0)
-            .show_animated(ctx, !self.selected.is_empty(), |ui| self.show_selection(ui));
+            .min_height(160.0)
+            .show(ctx, |ui| {
+                self.show_selection(ui);
+            });
 
         egui::CentralPanel::default().show(ctx, |ui| {
             self.show_path_input(ui);
@@ -264,6 +266,10 @@ impl App {
         ui: &mut egui::Ui,
         entries: &[ImageEntry],
     ) -> Option<Vec<(PathBuf, Monitor)>> {
+        let mut action = None;
+        let can_act = matches!(&self.monitors, Ok(m) if m.len() >= 2) && self.selected.len() == 2;
+        let busy = self.apply.is_running();
+
         ui.horizontal(|ui| {
             for (slot, &idx) in self.selected.items().iter().enumerate() {
                 let entry = &entries[idx];
@@ -279,70 +285,53 @@ impl App {
 
             if self.preview.has_texture() || self.preview.is_running() {
                 ui.separator();
-                if self.preview.is_running() {
-                    ui.vertical(|ui| {
-                        ui.label("result");
+                ui.vertical(|ui| {
+                    ui.label("Wallpaper");
+                    if self.preview.is_running() {
                         ui.spinner();
-                    });
-                } else {
-                    self.preview.show_inline(ui);
-                }
-            }
-        });
-
-        ui.add_space(3.0);
-        self.show_action_row(ui, entries)
-    }
-
-    fn show_action_row(
-        &self,
-        ui: &mut egui::Ui,
-        entries: &[ImageEntry],
-    ) -> Option<Vec<(PathBuf, Monitor)>> {
-        let mut action = None;
-        let can_act = matches!(&self.monitors, Ok(m) if m.len() >= 2) && self.selected.len() == 2;
-        let busy = self.apply.is_running();
-
-        ui.horizontal(|ui| {
-            if busy {
-                ui.spinner();
-                let log = self.apply.log();
-                if !log.is_empty() {
-                    ui.weak(log);
-                }
-            } else if can_act {
-                let monitors = self.monitors.as_ref().unwrap();
-                let assignments = || {
-                    self.selected
-                        .items()
-                        .iter()
-                        .zip(monitors.iter())
-                        .map(|(&idx, monitor)| {
-                            let path = PathBuf::from(entries[idx].texture.name());
-                            (path, monitor.clone())
-                        })
-                        .collect()
-                };
-
-                ui.add_space(3.0);
-                if ui.button("Apply").clicked() {
-                    action = Some(assignments());
-                }
-            }
-
-            if let Some(status) = self.apply.status() {
-                match status {
-                    Ok(()) => {
-                        ui.label("Applied!");
+                    } else {
+                        self.preview.show_image(ui);
                     }
-                    Err(e) => {
-                        ui.colored_label(egui::Color32::RED, e);
-                    }
-                }
-            }
 
-            // Reserve consistent height so the panel doesn't jump.
-            ui.allocate_space(egui::vec2(0.0, ui.spacing().interact_size.y));
+                    ui.add_space(3.0);
+                    if busy {
+                        ui.horizontal(|ui| {
+                            ui.spinner();
+                            let log = self.apply.log();
+                            if !log.is_empty() {
+                                ui.weak(log);
+                            }
+                        });
+                    } else if can_act {
+                        let monitors = self.monitors.as_ref().unwrap();
+                        let assignments = || {
+                            self.selected
+                                .items()
+                                .iter()
+                                .zip(monitors.iter())
+                                .map(|(&idx, monitor)| {
+                                    let path = PathBuf::from(entries[idx].texture.name());
+                                    (path, monitor.clone())
+                                })
+                                .collect()
+                        };
+                        if ui.button("Apply").clicked() {
+                            action = Some(assignments());
+                        }
+                    }
+
+                    if let Some(status) = self.apply.status() {
+                        match status {
+                            Ok(()) => {
+                                ui.label("Applied!");
+                            }
+                            Err(e) => {
+                                ui.colored_label(egui::Color32::RED, e);
+                            }
+                        }
+                    }
+                });
+            }
         });
 
         action

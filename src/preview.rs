@@ -59,15 +59,12 @@ impl PreviewJob {
         self.rx = None;
     }
 
-    pub fn show_inline(&self, ui: &mut egui::Ui) {
+    pub fn show_image(&self, ui: &mut egui::Ui) {
         let Some(texture) = &self.texture else { return };
-        ui.vertical(|ui| {
-            ui.label("Wallpaper");
-            ui.add(
-                egui::Image::new(egui::load::SizedTexture::from_handle(texture))
-                    .maintain_aspect_ratio(true)
-                    .fit_to_exact_size(egui::vec2(300.0, 300.0)),
-            );
-        });
+        ui.add(
+            egui::Image::new(egui::load::SizedTexture::from_handle(texture))
+                .maintain_aspect_ratio(true)
+                .fit_to_exact_size(egui::vec2(300.0, 300.0)),
+        );
     }
 }
