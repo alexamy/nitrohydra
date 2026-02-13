@@ -17,10 +17,30 @@ Browse a folder of images, select one wallpaper per monitor, and apply them inst
 
 ## Usage
 
+### GUI
+
+Run `nitrohydra` with no arguments to start the graphical interface.
+
 - **Click** an image to select it — first click sets monitor #1, second click sets monitor #2
 - **Click** a new image when both are chosen to replace monitor #2
 - **Click** a selected image when both are chosen to swap their order
 - **Shift+click** an image to select it for both monitors at once
+
+### CLI
+
+Apply wallpapers directly from the command line without opening the GUI:
+
+```bash
+nitrohydra <image1> <image2>
+```
+
+Images are assigned to monitors left-to-right. For example:
+
+```bash
+nitrohydra ~/wallpapers/forest.jpg ~/wallpapers/mountain.jpg
+```
+
+Use `nitrohydra --help` for a quick usage summary.
 
 ## Requirements
 

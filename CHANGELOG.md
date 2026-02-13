@@ -1,3 +1,11 @@
+# 0.3.0
+
+### Added
+- CLI mode
+
+### Changed
+- Moved preview to the bottom panel instead of modal window
+
 # 0.2.0
 
 ### Added
