@@ -5,6 +5,14 @@ A multi-monitor wallpaper picker for X11 GNOME-based desktop environments.
 > [!WARNING]
 > **Tested only on Cinnamon DE. Should work on Gnome and MATE too.**
 
+> [!IMPORTANT]
+> This app was primarily built using an AI tool — Claude Code. My contributions involved decisions around code decoupling and bug reporting after testing.
+> 
+> It solved my problem, and I hope it will help others too. I was satisfied with it as an app built in two days, but I'm now exploring Hydrapaper and similar tools to learn the proper way to interact with desktop environments, if one exists.
+> 
+> I welcome issues with suggestions for improvement.
+
+
 Browse a folder of images, select one wallpaper per monitor, and apply them instantly. Nitrohydra composes a single spanned image behind the scenes, so each monitor gets its own wallpaper even though Cinnamon only supports a single background URI.
 
 <img src="docs/gui.jpg" alt="Nitrohydra GUI screenshot" width="600"/>
